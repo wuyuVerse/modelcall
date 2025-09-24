@@ -1,0 +1,26 @@
+{
+    "terminal.integrated.defaultProfile.linux": "zsh",
+  
+    "terminal.integrated.profiles.linux": {
+        "zsh": {
+          "path": "zsh",
+          "args": ["-l"],
+          "env": {
+            "ZDOTDIR": "/volume/pt-train/users/wzhang/wjj-workspace"
+          },
+          "icon": "terminal"
+        },
+      "bash": {
+        "path": "bash",
+        "icon": "terminal-bash"
+      }
+    },
+  
+    "terminal.integrated.shellIntegration.enabled": true,
+  
+    "terminal.integrated.env.linux": {
+      "WORKSPACE_DIR": "/volume/pt-train/users/wzhang/wjj-workspace"
+    },
+  
+    "terminal.integrated.cwd": "/volume/pt-train/users/wzhang/wjj-workspace/modelcall"
+}

@@ -1,0 +1,87 @@
+# =============================================================================
+# 英文语料评分任务配置
+# =============================================================================
+
+task_name: "en_corpus_rating"
+description: "英文语料质量评分任务"
+
+# 数据配置
+data:
+  input_folder: "users/yzli/formatted_data/score-model_universal-corp-en_raw_clean_fuzzydedup_sample100w/CC-MAIN-2014-35"
+  output_folder: "users/yzli/tagged_data/en-corpus-rating/{timestamp}"
+  stat_folder: "./data/stats/en-corpus-rating"
+  input_key: "content_truncate_32k"
+  prompt_format_key: "text"
+
+# 预处理配置 (可选)
+preprocess:
+  enabled: false
+  source_name: "en_corpus"
+  file_pattern: "*.parquet"
+  max_tokens: 32768
+  num_proc: 32
+  
+  # 字段映射 - 假设原始数据已经有标准格式
+  field_mapping:
+    # text: "text"              # 保持text字段不变
+    # id: "id"                  # 保持ID字段不变
+    source: 
+      type: "constant"
+      value: "cc_crawl"         # 设置固定的source值
+  
+  # 数据过滤
+  filters:
+    min_text_length: 100        # 最小文本长度
+    max_text_length: 500000     # 最大文本长度
+    required_fields: ["text"]   # 必需字段
+  
+  # 数据转换
+  transformations:
+    text_cleaning:
+      remove_extra_whitespace: true
+    computed_fields:
+      char_count:
+        type: "text_length"
+        source_field: "text"
+
+# 模型配置
+model:
+  config_path: "configs/models/dpsk-v3-0526.yaml"
+  
+# 提示词配置  
+prompt:
+  config_path: "configs/prompts/en_corpus_rating_v0.1.yaml"
+
+# 并发配置
+concurrency:
+  max_concurrent_files: 1
+  max_concurrent_requests: 512
+  chunk_size: 1024
+  parquet_save_interval: 1024
+
+# 分布式配置
+distributed:
+  enabled: false
+  world_size: 1
+  
+# 调试配置
+debug:
+  enabled: false
+  max_files: null
+  max_items_per_file: null
+
+# 重试配置
+retry:
+  enable_format_validation_retry: true
+  max_retries: 3
+
+# 其他配置
+options:
+  resume: true
+  delete_existing: false
+
+# 日志配置
+logging:
+  level: "INFO"
+  batch_size: 500
+  progress_report_interval: 20

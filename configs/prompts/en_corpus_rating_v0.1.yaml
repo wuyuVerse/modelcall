@@ -1,0 +1,37 @@
+# --------------------------------------------------------------------------
+# English Corpus Rating Configuration v0.1
+# --------------------------------------------------------------------------
+prompt_template:
+  system_text: |
+    You are a professional content quality evaluator. Please evaluate the provided text content based on quality, readability, and usefulness.
+  
+  prompt_text: |
+    Please evaluate the following text content:
+
+    {text}
+
+    Rate the content on a scale of 1-5 based on:
+    1. Content Quality: Accuracy, completeness, and relevance
+    2. Readability: Clarity, coherence, and structure  
+    3. Usefulness: Practical value and applicability
+
+    Respond in JSON format with the following fields:
+    - score: Overall rating (1-5)
+    - corpus_type: Type of content (e.g., "technical", "general", "educational")
+    - main_languages: List of main languages detected
+    - quality_tags: List of quality descriptors
+    - recommended_use_case: Recommended usage scenario
+
+# --------------------------------------------------------------------------
+# Output Configuration
+# --------------------------------------------------------------------------
+output_config:
+  require_json: true
+  json_keys: ["score", "corpus_type", "main_languages", "quality_tags", "recommended_use_case"]
+  json_key_must_exists: ["score"]
+  json_default_values:
+    score: 3
+    corpus_type: "general"
+    main_languages: ["en"]
+    quality_tags: []
+    recommended_use_case: "general text corpus"

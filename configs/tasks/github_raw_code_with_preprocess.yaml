@@ -1,0 +1,72 @@
+# =============================================================================
+# GitHub原始代码预处理+评分任务配置
+# =============================================================================
+
+task_name: "github_raw_code_with_preprocess"
+description: "GitHub原始代码数据预处理并评分"
+
+# 数据配置 - 这将被预处理输出覆盖
+data:
+  input_folder: "users/formatted_data/github_preprocessed"  # 预处理后的数据
+  output_folder: "users/yzli/tagged_data/github-raw-code-rating/{timestamp}"
+  stat_folder: "./data/stats/github-raw-code-rating"
+  input_key: "text"
+  prompt_format_key: "code_corpus_description_and_sample"
+
+# 预处理配置 - 启用GitHub原始代码预处理
+preprocess:
+  enabled: true                              # 启用预处理
+  script_type: "github_raw_code"             # 使用GitHub专用预处理脚本
+  
+  # 原始数据路径
+  input_folder: "users/jianzhou/text/score_model/en/raw_clean_fuzzydedup_sample100w/CC-MAIN-2014-35/"
+  # 预处理输出路径
+  output_folder: "users/formatted_data/github_preprocessed"
+  
+  # 预处理参数
+  max_tokens: 32768         # 最大token数（会创建content_truncate_32k字段）
+  num_proc: 16              # 处理进程数
+  seed: 42                  # 随机种子
+  num_files: 2              # 只处理2个文件用于测试
+
+# 模型配置
+model:
+  config_path: "configs/models/dpsk-v3-0526.yaml"
+  
+# 提示词配置  
+prompt:
+  config_path: "configs/prompts/code_corpus_rating_v0.3.yaml"
+
+# 并发配置
+concurrency:
+  max_concurrent_files: 1   # 预处理后再评分，降低并发
+  max_concurrent_requests: 10
+  chunk_size: 100
+  parquet_save_interval: 200
+
+# 分布式配置
+distributed:
+  enabled: false
+  world_size: 1
+  
+# 调试配置
+debug:
+  enabled: true             # 启用调试模式
+  max_files: 2              # 只处理2个文件
+  max_items_per_file: 50    # 每个文件只处理50个项目
+
+# 重试配置
+retry:
+  enable_format_validation_retry: true
+  max_retries: 3
+
+# 其他配置
+options:
+  resume: true
+  delete_existing: false
+
+# 日志配置
+logging:
+  level: "INFO"
+  batch_size: 50
+  progress_report_interval: 5
