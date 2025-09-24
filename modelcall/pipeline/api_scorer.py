@@ -89,7 +89,7 @@ class APIScorer:
                 try:
                     # Try to parse the response to validate JSON format
                     parsed_result = self._robust_json_parse(response)
-                    print(f"✅ Valid JSON response received with keys: {list(parsed_result.keys())}")
+                    # JSON validation successful - no need to print for every item
                 except Exception as parse_error:
                     print(f"❌ JSON validation failed: {parse_error}")
                     print(f"📄 Raw response (first 200 chars): {response[:200]}...")
@@ -164,7 +164,13 @@ class APIScorer:
     def _build_message(self, item: Dict[str, Any], input_key: str = "text", prompt_format_key: str = "code_corpus_description_and_sample") -> List[Dict[str, str]]:
         """Build message for API call."""
         prompt_template = self.prompt_config.prompt_template.prompt_text
+        
+        # Create format kwargs with the primary content and all available item fields
         format_kwargs = {prompt_format_key: item[input_key]}
+        
+        # Add all item fields for template formatting
+        for key, value in item.items():
+            format_kwargs[key] = value
         
         try:
             prompt = prompt_template.format_map(format_kwargs)

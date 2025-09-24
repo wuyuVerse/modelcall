@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Iterable, BinaryIO
+import glob as py_glob
 
 from .base import FileSystem, FSConfig
 
@@ -32,6 +33,12 @@ class LocalFileSystem(FileSystem):
 
 	def makedirs(self, path: str, exist_ok: bool = True) -> None:
 		self._resolve(path).mkdir(parents=True, exist_ok=exist_ok)
+
+	def glob(self, pattern: str) -> Iterable[str]:
+		"""Glob pattern matching for local paths."""
+		# Resolve the pattern to an absolute path
+		resolved_pattern = str(self._resolve(pattern))
+		return py_glob.glob(resolved_pattern)
 
 	def remove(self, path: str) -> None:
 		full = self._resolve(path)

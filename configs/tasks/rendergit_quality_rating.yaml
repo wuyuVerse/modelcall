@@ -1,0 +1,81 @@
+# =============================================================================
+# RenderGit打包效果质量评分任务配置
+# =============================================================================
+
+task_name: "rendergit_quality_rating"
+description: "评估RenderGit工具对代码仓库的打包效果质量"
+
+# 数据配置
+data:
+  input_folder: "./data/formatted/rendergit-quality"  # 预处理后的数据（本地路径）
+  output_folder: "./data/tagged/rendergit-quality/{timestamp}"
+  stat_folder: "./data/stats/rendergit-quality"
+  input_key: "content_truncate_32k"  # 使用截断后的内容
+  prompt_format_key: "content_truncate_32k"
+
+# 预处理配置 - 启用RenderGit CXML预处理
+preprocess:
+  enabled: true                              # 启用预处理
+  script_type: "repo_xml"                    # 使用代码仓库XML/CXML预处理脚本
+  
+  # 原始数据路径
+  input_folder: "/volume/pt-train/users/wzhang/wjj-workspace/issue2commit/data/rendergit_output"
+  # 预处理输出路径
+  output_folder: "./data/formatted/rendergit-quality"
+  
+  # 预处理参数
+  max_tokens: 32768         # 最大token数
+  num_proc: 32               # 处理进程数（XML解析较耗CPU）
+  seed: 42                  # 随机种子
+  num_files: -1             # 处理所有文件（-1表示不限制）
+  
+  # 指定处理的编程语言（可选，不指定则处理全部）
+  languages: ["Arduino"]  # 可以指定特定语言
+
+# 模型配置
+model:
+  config_path: "configs/models/dpsk-v3-pro.yaml"
+  
+# 提示词配置 (与Repomix共用)
+prompt:
+  config_path: "configs/prompts/repo_packaging_quality_rating_v1.0.yaml"
+
+# 环境配置
+environment:
+  config_path: "env/add_siliconflow_api.env"  # 指定SiliconFlow API环境
+  tos_config_path: "env/add_tos_key.env"      # 单独的TOS配置
+  timeout: 1200  # API超时时间（秒）
+
+# 并发配置
+concurrency:
+  max_concurrent_files: 2   # XML内容较大，降低并发
+  max_concurrent_requests: 512  # 使用SiliconFlow高并发
+  chunk_size: 10            # 批次较小，XML内容复杂
+  parquet_save_interval: 50
+
+# 分布式配置
+distributed:
+  enabled: false
+  world_size: 1
+  
+# 调试配置
+debug:
+  enabled: true             # 启用调试模式
+  max_files: 5              # 只处理5个文件
+  max_items_per_file: 10    # 每个文件只处理10个项目
+
+# 重试配置
+retry:
+  enable_format_validation_retry: true
+  max_retries: 3
+
+# 其他配置
+options:
+  resume: true
+  delete_existing: false
+
+# 日志配置
+logging:
+  level: "INFO"
+  batch_size: 20
+  progress_report_interval: 3

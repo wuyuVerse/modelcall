@@ -51,6 +51,9 @@ source env/add_tos_key.env
 # 运行包含预处理的GitHub任务
 ./scripts/run_task.sh configs/tasks/github_raw_code_with_preprocess.yaml
 
+# 运行Repomix打包效果评分任务 🆕
+./scripts/run_task.sh configs/tasks/repomix_quality_rating.yaml
+
 # 运行英文语料评分任务  
 ./scripts/run_task.sh configs/tasks/en_corpus_rating.yaml
 
@@ -76,10 +79,10 @@ uv run python scripts/create_task.py my_new_task --template basic
 
 ```bash
 # 本地文件
-uv run modelcall pipeline input.jsonl output.jsonl --fs local
+uv run python -m modelcall pipeline input.jsonl output.jsonl --fs local
 
 # TOS文件
-uv run modelcall pipeline tos://bucket/input.parquet tos://bucket/output.parquet --fs tos
+uv run python -m modelcall pipeline tos://bucket/input.parquet tos://bucket/output.parquet --fs tos
 ```
 
 ### 2. 数据预处理 ⭐
@@ -88,19 +91,28 @@ uv run modelcall pipeline tos://bucket/input.parquet tos://bucket/output.parquet
 
 ```bash
 # GitHub原始代码预处理 (支持JSONL/Parquet输入)
-uv run modelcall preprocess github \
+uv run python -m modelcall preprocess github \
     --raw_path "users/data/github_raw_code/" \
     --output_dir "users/data/github_preprocessed/" \
     --stat_dir "./stats/github_preprocess/" \
     --num_files 2 \
     --num_proc 16
 
+# Repomix XML文件预处理 🆕
+uv run python -m modelcall preprocess repomix \
+    --raw_path "/path/to/repomix_output/" \
+    --output_dir "users/data/repomix_preprocessed/" \
+    --stat_dir "./stats/repomix/" \
+    --num_files 100 \
+    --languages Python Java JavaScript
+
 # 在任务中启用预处理（推荐方式）
 # 编辑任务配置文件：configs/tasks/xxx.yaml
 # preprocess:
 #   enabled: true
-#   script_type: "github_raw_code"           # 专用预处理脚本
-#   input_folder: "users/raw_data/github"    # 支持本地/TOS
+#   script_type: "github_raw_code"           # GitHub专用脚本
+#   script_type: "repomix_xml"               # Repomix专用脚本 🆕
+#   input_folder: "users/raw_data/"          # 支持本地/TOS
 #   output_folder: "users/formatted_data/"   # 强制Parquet输出
 ```
 
@@ -108,17 +120,17 @@ uv run modelcall preprocess github \
 
 ```bash
 # 使用任务配置文件运行
-uv run modelcall run-task configs/tasks/github_code_rating.yaml
+uv run python -m modelcall run-task configs/tasks/github_code_rating.yaml
 
 # 分布式运行 (节点 2/10)
-uv run modelcall run-task configs/tasks/distributed_rating.yaml --job_index 2 --world_size 10
+uv run python -m modelcall run-task configs/tasks/distributed_rating.yaml --job_index 2 --world_size 10
 ```
 
 ### 4. 传统API调用方式 (仍支持)
 
 ```bash
 # 直接使用API调用命令
-uv run modelcall api-call \
+uv run python -m modelcall api-call \
     --input_folder "users/data/formatted/" \
     --output_folder "users/data/scored/" \
     --model_config_path "configs/models/dpsk-v3-0526.yaml" \

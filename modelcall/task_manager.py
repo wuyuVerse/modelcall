@@ -16,6 +16,7 @@ from .utils import get_tos_config
 from .logging_manager import setup_logging, cleanup_logging, get_logger
 from .data_processing.universal_preprocessor import create_preprocessor_from_config
 from .data_processing.github_raw_code_preprocess import GitHubRawCodePreprocessor
+from .data_processing.repo_xml_preprocess import RepoXMLPreprocessor
 
 
 class TaskManager:
@@ -58,10 +59,10 @@ class TaskManager:
             output_folder = output_folder.replace(key, value)
             stat_folder = stat_folder.replace(key, value)
         
-        # 添加TOS前缀（如果需要）
-        if not input_folder.startswith(("tos://", "/", ".")):
+        # 添加TOS前缀（如果需要）- 只对相对路径（不以tos://、/、.开头）
+        if not input_folder.startswith(("tos://", "/", "./")):
             input_folder = f"tos://agi-data/{input_folder}"
-        if not output_folder.startswith(("tos://", "/", ".")):
+        if not output_folder.startswith(("tos://", "/", "./")):
             output_folder = f"tos://agi-data/{output_folder}"
         
         paths = {
@@ -78,25 +79,49 @@ class TaskManager:
         """设置环境变量"""
         env_config = self.config.get("environment", {})
         
-        # 设置API提供商
-        api_provider = env_config.get("api_provider", "local")
+        # 获取API环境配置文件路径
+        api_env_file = env_config.get("config_path")
         
-        if api_provider == "local":
-            env_file = "env/add_local_dpsk_v3.env"
-        elif api_provider == "siliconflow":
-            env_file = "env/add_siliconflow_api.env"
-        else:
-            print(f"⚠️ 未知的API提供商: {api_provider}")
+        if not api_env_file:
+            print("⚠️ 未指定API环境配置文件")
             return
         
-        # 加载环境文件
-        if os.path.exists(env_file):
-            print(f"🔧 加载环境配置: {env_file}")
-            # 这里可以添加环境变量加载逻辑
+        # 加载API环境文件
+        if os.path.exists(api_env_file):
+            print(f"🔧 加载API环境配置: {api_env_file}")
+            self._load_env_file(api_env_file)
+            
+            print(f"✅ API环境变量已加载: BASE_URL={os.environ.get('BASE_URL', 'Not set')}")
+            print(f"✅ API环境变量已加载: API_KEY={os.environ.get('API_KEY', 'Not set')}")
+        else:
+            print(f"❌ API环境配置文件不存在: {api_env_file}")
+        
+        # 获取TOS环境配置文件路径（可选）
+        tos_env_file = env_config.get("tos_config_path")
+        if tos_env_file and os.path.exists(tos_env_file):
+            print(f"🔧 加载TOS环境配置: {tos_env_file}")
+            self._load_env_file(tos_env_file)
+            print(f"✅ TOS环境变量已加载: TOS_ENDPOINT={os.environ.get('TOS_ENDPOINT', 'Not set')}")
         
         # 设置超时
         if "timeout" in env_config:
             os.environ["REQUEST_TIMEOUT"] = str(env_config["timeout"])
+    
+    def _load_env_file(self, env_file: str) -> None:
+        """加载环境配置文件"""
+        with open(env_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    # 处理 export VAR=value 格式
+                    if line.startswith('export '):
+                        line = line[7:]  # 移除 'export '
+                    
+                    # 分割变量名和值
+                    key, value = line.split('=', 1)
+                    # 移除引号
+                    value = value.strip('"\'')
+                    os.environ[key] = value
     
     def create_processor(self, job_index: int = 0, world_size: int = 1, run_index: int = 1) -> ConcurrentFileProcessor:
         """创建处理器实例"""
@@ -152,6 +177,13 @@ class TaskManager:
             if logger:
                 logger.info("🔧 使用GitHub原始代码预处理脚本")
             
+            # 处理调试模式的文件限制
+            debug_max_files = None
+            if self.config.debug.enabled and hasattr(self.config.debug, 'max_files'):
+                debug_max_files = self.config.debug.max_files
+            
+            num_files = debug_max_files if debug_max_files is not None else preprocess_config.get("num_files", -1)
+            
             preprocessor = GitHubRawCodePreprocessor(
                 raw_path=preprocess_input,
                 output_dir=preprocess_output.replace("tos://agi-data/", ""),  # 移除前缀
@@ -160,7 +192,34 @@ class TaskManager:
                 max_tokens=preprocess_config.get("max_tokens", 32768),
                 num_proc=preprocess_config.get("num_proc", 32),
                 seed=preprocess_config.get("seed", 42),
-                num_files=preprocess_config.get("num_files", -1)
+                num_files=num_files
+            )
+            
+            # 运行预处理
+            preprocessor.run()
+            
+        elif script_type == "repo_xml":
+            # 使用代码仓库XML/CXML预处理脚本
+            if logger:
+                logger.info("🔧 使用代码仓库XML/CXML预处理脚本")
+            
+            # 处理调试模式的文件限制
+            debug_max_files = None
+            if self.config.debug.enabled and hasattr(self.config.debug, 'max_files'):
+                debug_max_files = self.config.debug.max_files
+            
+            num_files = debug_max_files if debug_max_files is not None else preprocess_config.get("num_files", -1)
+            
+            preprocessor = RepoXMLPreprocessor(
+                raw_path=preprocess_input,
+                output_dir=preprocess_output.replace("tos://agi-data/", ""),  # 移除前缀
+                stat_dir=paths["stat_folder"] + "_preprocess",
+                fs_cfg=self.fs_cfg,
+                max_tokens=preprocess_config.get("max_tokens", 32768),
+                num_proc=preprocess_config.get("num_proc", 16),
+                seed=preprocess_config.get("seed", 42),
+                num_files=num_files,
+                languages=preprocess_config.get("languages")
             )
             
             # 运行预处理
@@ -195,8 +254,7 @@ class TaskManager:
             logger.info("✅ 数据预处理完成")
         
         # 更新任务配置中的输入路径为预处理后的路径
-        if not preprocess_output.startswith("tos://"):
-            preprocess_output = f"tos://agi-data/{preprocess_output}"
+        # 保持预处理输出路径的原始格式（本地/TOS）
         self.config.data.input_folder = preprocess_output
 
     async def run_task(self, job_index: int = 0, world_size: int = None) -> None:

@@ -1,0 +1,10 @@
+# --------------------------------------------------------------------------
+# Qwen3-480B Model Configuration
+# --------------------------------------------------------------------------
+provider: "qwen"
+model_name: "qwen3-480b"
+# 严格跟 client.chat.completions.create() 的参数名保持一致，可以直接覆盖
+completions_params:
+  temperature: 0.6  # 较低的温度适用于需要事实性、确定性输出的场景
+  max_tokens: 512
+  # top_p: 0.95  # 其他可以控制模型输出的参数

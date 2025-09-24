@@ -244,13 +244,15 @@ class ConcurrentFileProcessor:
                     if logger:
                         logger.update_progress(f"file_{filename}", len(batch))
                     
-                    # Intermediate save
+                    # Intermediate save (only successful ones)
                     if (self.parquet_save_interval > 0 and 
                         len(processed_items) % self.parquet_save_interval == 0):
-                        if logger:
-                            logger.info(f"💾 中间保存: {len(processed_items)} 个结果")
-                        writer = DataWriter(self.output_fs)
-                        writer.write(output_path, processed_items)
+                        successful_items = [item for item in processed_items if item.get("api_status") == "success"]
+                        if successful_items:
+                            if logger:
+                                logger.info(f"💾 中间保存: {len(successful_items)} 个成功结果")
+                            writer = DataWriter(self.output_fs)
+                            writer.write(output_path, successful_items)
                     
                     # 每10个批次输出一次进度
                     if batch_count % 10 == 0 and logger:
@@ -266,12 +268,16 @@ class ConcurrentFileProcessor:
                     logger.info(f"✅ 文件处理完成: {filename}")
                     logger.info(f"   总体成功率: {n_success}/{len(work_items)} ({success_rate:.1f}%)")
                 
-                # Write final results
-                if processed_items:
+                # Write final results (only successful ones)
+                successful_items = [item for item in processed_items if item.get("api_status") == "success"]
+                if successful_items:
                     writer = DataWriter(self.output_fs)
-                    writer.write(output_path, processed_items)
+                    writer.write(output_path, successful_items)
                     if logger:
-                        logger.info(f"📁 写入 {len(processed_items)} 个项目到输出文件")
+                        logger.info(f"📁 写入 {len(successful_items)} 个成功项目到输出文件")
+                elif processed_items:
+                    if logger:
+                        logger.warning(f"⚠️ 所有 {len(processed_items)} 个项目都失败了，不写入输出文件")
                 
                 # 记录文件处理结果
                 if logger:

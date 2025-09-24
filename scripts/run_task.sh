@@ -80,7 +80,7 @@ echo "🔄 启动后台任务..."
     echo "========================="
     echo ""
     
-    uv run modelcall run-task "$TASK_CONFIG" --job_index "$JOB_INDEX" --world_size "$WORLD_SIZE"
+    uv run python -m modelcall run-task "$TASK_CONFIG" --job_index "$JOB_INDEX" --world_size "$WORLD_SIZE"
     
     echo ""
     echo "=== 任务完成 ==="
