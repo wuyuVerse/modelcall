@@ -25,33 +25,37 @@ preprocess:
   
   # 预处理参数
   max_tokens: 32768         # 最大token数
-  num_proc: 32               # 处理进程数（XML解析较耗CPU）
+  num_proc: 32              # 降低进程数，避免内存压力
   seed: 42                  # 随机种子
   num_files: -1             # 处理所有文件（-1表示不限制）
   
+  # 新增：分批写入和内存管理配置
+  batch_size: 500           # 每500个CXML文件写入一次，避免内存溢出
+                            # 可根据内存情况调整：内存大调高，内存小调低
+  
   # 指定处理的编程语言（可选，不指定则处理全部）
-  languages: ["Arduino"]  # 可以指定特定语言
+  # languages: ["Clojure"]  # 可以指定特定语言
 
-# 模型配置
+# 模型配置 - 使用Qwen3-Coder-480B
 model:
-  config_path: "configs/models/dpsk-v3-pro.yaml"
+  config_path: "configs/models/qwen3-coder-480b.yaml"
   
 # 提示词配置 (与Repomix共用)
 prompt:
   config_path: "configs/prompts/repo_packaging_quality_rating_v1.0.yaml"
 
-# 环境配置
+# 环境配置 - 使用Qwen3-480B外部API
 environment:
-  config_path: "env/add_siliconflow_api.env"  # 指定SiliconFlow API环境
+  config_path: "env/add_qwen3_480b_external.env"  # 指定Qwen3-480B外部API环境
   tos_config_path: "env/add_tos_key.env"      # 单独的TOS配置
-  timeout: 1200  # API超时时间（秒）
+  timeout: 180  # API超时时间（秒）- 480B模型需要更长处理时间
 
-# 并发配置
+# 并发配置 - 针对Qwen3-480B超大模型优化
 concurrency:
-  max_concurrent_files: 2   # XML内容较大，降低并发
-  max_concurrent_requests: 512  # 使用SiliconFlow高并发
-  chunk_size: 10            # 批次较小，XML内容复杂
-  parquet_save_interval: 50
+  max_concurrent_files: 1   # 降低文件并发度，减少内存压力
+  max_concurrent_requests: 64  # 480B模型处理较慢，降低并发避免超时
+  chunk_size: 64            # 减小批次大小，适应超大模型处理速度
+  parquet_save_interval: 50   # 更频繁保存，避免数据丢失
 
 # 分布式配置
 distributed:
@@ -60,9 +64,12 @@ distributed:
   
 # 调试配置
 debug:
-  enabled: true             # 启用调试模式
-  max_files: 5              # 只处理5个文件
-  max_items_per_file: 10    # 每个文件只处理10个项目
+  enabled: false            # 禁用调试模式，处理所有数据
+  max_files: -1             # 处理所有文件
+  max_items_per_file: -1    # 处理所有项目
+  # enabled: true             # 启用调试模式
+  # max_files: 5              # 只处理5个文件
+  # max_items_per_file: 10    # 每个文件只处理10个项目
 
 # 重试配置
 retry:
@@ -71,8 +78,8 @@ retry:
 
 # 其他配置
 options:
-  resume: true
-  delete_existing: false
+  resume: true              # 支持断点续传（预处理和主处理都支持）
+  delete_existing: false    # 不删除已有文件，配合断点续传使用
 
 # 日志配置
 logging:

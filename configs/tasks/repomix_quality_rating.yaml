@@ -25,9 +25,13 @@ preprocess:
   
   # 预处理参数
   max_tokens: 32768         # 最大token数
-  num_proc: 32               # 处理进程数（XML解析较耗CPU）
+  num_proc: 32              # 降低进程数，避免内存压力
   seed: 42                  # 随机种子
   num_files: -1             # 处理所有文件（-1表示不限制）
+  
+  # 新增：分批写入和内存管理配置
+  batch_size: 500           # 每500个XML文件写入一次，避免内存溢出
+                            # 可根据内存情况调整：内存大调高，内存小调低
   
   # 指定处理的编程语言（可选，不指定则处理全部）
   # languages: ["Arduino"]  # 注释掉以处理所有语言
@@ -46,12 +50,12 @@ environment:
   tos_config_path: "env/add_tos_key.env"      # 单独的TOS配置
   timeout: 1200  # API超时时间（秒）
 
-# 并发配置
+# 并发配置 - 针对512 RPM限制优化
 concurrency:
-  max_concurrent_files: 2   # XML内容较大，降低并发
-  max_concurrent_requests: 512  # 使用SiliconFlow高并发
-  chunk_size: 10            # 批次较小，XML内容复杂
-  parquet_save_interval: 50
+  max_concurrent_files: 1   # 降低文件并发度，减少内存压力
+  max_concurrent_requests: 64  # 严格控制在512 RPM以内 (20*3秒*60/60 ≈ 400 RPM)
+  chunk_size: 32            # 降低批次大小，避免突发流量
+  parquet_save_interval: 100
 
 # 分布式配置
 distributed:
@@ -74,8 +78,8 @@ retry:
 
 # 其他配置
 options:
-  resume: true
-  delete_existing: false
+  resume: true              # 支持断点续传（预处理和主处理都支持）
+  delete_existing: false    # 不删除已有文件，配合断点续传使用
 
 # 日志配置
 logging:

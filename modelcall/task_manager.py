@@ -187,12 +187,13 @@ class TaskManager:
             preprocessor = GitHubRawCodePreprocessor(
                 raw_path=preprocess_input,
                 output_dir=preprocess_output.replace("tos://agi-data/", ""),  # 移除前缀
-                stat_dir=paths["stat_folder"] + "_preprocess",
+                stat_dir=os.path.join(paths["stat_folder"], "preprocess"),
                 fs_cfg=self.fs_cfg,
                 max_tokens=preprocess_config.get("max_tokens", 32768),
                 num_proc=preprocess_config.get("num_proc", 32),
                 seed=preprocess_config.get("seed", 42),
-                num_files=num_files
+                num_files=num_files,
+                batch_size=preprocess_config.get("batch_size", 1000)
             )
             
             # 运行预处理
@@ -213,13 +214,14 @@ class TaskManager:
             preprocessor = RepoXMLPreprocessor(
                 raw_path=preprocess_input,
                 output_dir=preprocess_output.replace("tos://agi-data/", ""),  # 移除前缀
-                stat_dir=paths["stat_folder"] + "_preprocess",
+                stat_dir=os.path.join(paths["stat_folder"], "preprocess"),
                 fs_cfg=self.fs_cfg,
                 max_tokens=preprocess_config.get("max_tokens", 32768),
                 num_proc=preprocess_config.get("num_proc", 16),
                 seed=preprocess_config.get("seed", 42),
                 num_files=num_files,
-                languages=preprocess_config.get("languages")
+                languages=preprocess_config.get("languages"),
+                batch_size=preprocess_config.get("batch_size", 1000)
             )
             
             # 运行预处理
@@ -241,7 +243,7 @@ class TaskManager:
                 preprocess_config=preprocess_config,
                 raw_path=preprocess_input,
                 output_dir=preprocess_output,
-                stat_dir=paths["stat_folder"] + "_preprocess",
+                stat_dir=os.path.join(paths["stat_folder"], "preprocess"),
                 fs_cfg=self.fs_cfg,
                 max_tokens=preprocess_config.get("max_tokens", 32768),
                 num_proc=preprocess_config.get("num_proc", 32)

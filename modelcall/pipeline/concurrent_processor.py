@@ -51,11 +51,15 @@ class ConcurrentFileProcessor:
         self.input_fs = get_filesystem(input_folder, fs_cfg)
         self.output_fs = get_filesystem(output_folder, fs_cfg)
         
+        # Get timeout from environment or default
+        request_timeout = int(os.environ.get("REQUEST_TIMEOUT", "120"))
+        
         # Initialize API scorer
         self.api_scorer = APIScorer(
             model_config_path=model_config_path,
             prompt_config_path=prompt_config_path,
             max_concurrent_requests=max_concurrent_requests,
+            request_timeout=request_timeout,
             enable_format_validation_retry=enable_format_validation_retry
         )
         self.concurrent_scorer = ConcurrentAPIScorer(self.api_scorer)
@@ -244,14 +248,15 @@ class ConcurrentFileProcessor:
                     if logger:
                         logger.update_progress(f"file_{filename}", len(batch))
                     
-                    # Intermediate save (only successful ones)
+                    # Intermediate save (cumulative, only successful ones)
                     if (self.parquet_save_interval > 0 and 
                         len(processed_items) % self.parquet_save_interval == 0):
                         successful_items = [item for item in processed_items if item.get("api_status") == "success"]
                         if successful_items:
                             if logger:
-                                logger.info(f"💾 中间保存: {len(successful_items)} 个成功结果")
+                                logger.info(f"💾 中间保存: {len(successful_items)} 个成功结果 (累积模式)")
                             writer = DataWriter(self.output_fs)
+                            # 累积式保存：保存所有成功的item，不是覆盖
                             writer.write(output_path, successful_items)
                     
                     # 每10个批次输出一次进度

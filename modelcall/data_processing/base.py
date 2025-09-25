@@ -28,13 +28,15 @@ class BasePreprocessor:
                  stat_dir: str,
                  fs_cfg: Dict[str, Any],
                  max_tokens: int = 32768,
-                 num_proc: int = 32):
+                 num_proc: int = 32,
+                 batch_size: int = 1000):
         self.raw_path = raw_path
         self.output_dir = output_dir
         self.stat_dir = stat_dir
         self.fs_cfg = fs_cfg
         self.max_tokens = max_tokens
         self.num_proc = num_proc
+        self.batch_size = batch_size  # 新增批次大小参数
         self.enc = tiktoken.encoding_for_model("gpt-4o")
         
         # Ensure stat directory exists
@@ -54,21 +56,84 @@ class BasePreprocessor:
             # Read data
             data = list(reader.read(input_path))
             
-            # Process data
-            processed_data = []
-            for item in data:
-                processed_item = self.process_item(item)
-                if processed_item:
-                    processed_data.append(processed_item)
-            
-            # Write processed data
-            writer.write(output_path, processed_data)
-            
-            return True, len(processed_data)
+            # Process data with batch writing
+            return self.process_data_with_batching(data, output_path, writer)
             
         except Exception as e:
             print(f"Failed to process file {input_path}: {e}")
             return False, 0
+    
+    def process_data_with_batching(self, data: List[Dict[str, Any]], output_path: str, writer: DataWriter) -> Tuple[bool, int]:
+        """Process data with batch writing support and proper resume logic."""
+        from datetime import datetime
+        
+        # 创建进度文件路径（避免多进程冲突）
+        progress_file = output_path + ".progress.json"
+        
+        # 检查断点续传状态
+        existing_data = []
+        start_index = 0
+        
+        if os.path.exists(output_path) and os.path.exists(progress_file):
+            try:
+                # 读取进度信息
+                with open(progress_file, 'r', encoding='utf-8') as f:
+                    progress_info = json.load(f)
+                
+                start_index = progress_info.get('processed_count', 0)
+                
+                # 读取已有数据
+                temp_fs = get_filesystem(output_path, self.fs_cfg)
+                temp_reader = DataReader(temp_fs)
+                existing_data = list(temp_reader.read(output_path))
+                
+                print(f"📊 断点续传: 跳过前 {start_index} 个items, 已有 {len(existing_data)} 条记录")
+                
+                # 验证数据一致性
+                if len(existing_data) != start_index:
+                    print(f"⚠️ 数据不一致，重新开始处理")
+                    start_index = 0
+                    existing_data = []
+                    
+            except Exception as e:
+                print(f"⚠️ 无法读取断点续传数据: {e}, 从头开始")
+                start_index = 0
+                existing_data = []
+        
+        processed_data = list(existing_data)
+        items_since_last_save = 0
+        
+        # 处理剩余数据
+        for i in range(start_index, len(data)):
+            processed_item = self.process_item(data[i])
+            if processed_item:
+                processed_data.append(processed_item)
+                items_since_last_save += 1
+            
+            # 按批次保存
+            if items_since_last_save >= self.batch_size or i == len(data) - 1:
+                # 写入数据文件
+                writer.write(output_path, processed_data)
+                
+                # 更新进度文件
+                progress_info = {
+                    "processed_count": i + 1,
+                    "total_items": len(processed_data),
+                    "last_update": datetime.now().isoformat(),
+                    "batch_size": self.batch_size
+                }
+                
+                with open(progress_file, 'w', encoding='utf-8') as f:
+                    json.dump(progress_info, f, indent=2)
+                
+                print(f"💾 批次保存: 处理到第 {i+1}/{len(data)} 项, 总计 {len(processed_data)} 条记录")
+                items_since_last_save = 0
+        
+        # 完成后清理进度文件
+        if os.path.exists(progress_file):
+            os.remove(progress_file)
+            
+        return True, len(processed_data)
     
     def process_item(self, item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Process a single data item. Override in subclasses."""
@@ -99,6 +164,7 @@ class BasePreprocessor:
         """Check existing progress and return files that need processing."""
         files_to_process = []
         n_completed = 0
+        n_partial = 0
         n_no_stat = 0
         
         for input_file, output_file in file_pairs:
@@ -108,28 +174,76 @@ class BasePreprocessor:
             
             # Check if already processed
             stat = load_progress_stat(progress_stat_file)
+            if stat and stat.get("formatted_file_path") and stat.get("processing_complete", False):
+                # 检查输出文件是否真实存在
+                output_fs = get_filesystem(output_file, self.fs_cfg)
+                try:
+                    if output_fs.exists(output_file):
+                        n_completed += 1
+                        print(f"✓ Skipping completed file: {os.path.basename(input_file)}")
+                        continue
+                except:
+                    pass
+            
+            # 检查是否有部分处理结果
             if stat and stat.get("formatted_file_path"):
-                n_completed += 1
-                continue
+                n_partial += 1
+                print(f"⚡ Found partial progress for: {os.path.basename(input_file)}")
             else:
                 n_no_stat += 1
             
             files_to_process.append((input_file, output_file, progress_stat_file))
         
-        print(f"Progress check: {n_completed} completed, {n_no_stat} to process")
+        print(f"Progress check: {n_completed} completed, {n_partial} partial, {n_no_stat} new files to process")
         return files_to_process
     
     def process_worker(self, args_tuple: Tuple[str, str, str]) -> Tuple[str, bool]:
         """Worker function for multiprocessing."""
         input_file, output_file, progress_stat_file = args_tuple
         
+        # 记录开始时间
+        from datetime import datetime
+        start_time = datetime.now()
+        
         success, n_sample = self.process_single_file(input_file, output_file)
         
-        # Save progress
+        # 记录结束时间
+        end_time = datetime.now()
+        processing_time = (end_time - start_time).total_seconds()
+        
+        # Save enhanced progress statistics
         stat = copy.deepcopy(DEFAULT_FILE_STAT)
         stat["raw_file_path"] = input_file
         stat["formatted_file_path"] = output_file if success else ""
         stat["n_sample"] = n_sample
+        stat["processing_complete"] = success
+        stat["start_time"] = start_time.isoformat()
+        stat["end_time"] = end_time.isoformat()
+        stat["processing_time_seconds"] = processing_time
+        stat["batch_size"] = self.batch_size
+        stat["max_tokens"] = self.max_tokens
+        
+        # 添加文件信息
+        try:
+            file_size = os.path.getsize(input_file) if os.path.exists(input_file) else 0
+            stat["input_file_size_bytes"] = file_size
+        except:
+            stat["input_file_size_bytes"] = 0
+            
+        # 添加输出文件信息
+        if success:
+            try:
+                output_fs = get_filesystem(output_file, self.fs_cfg)
+                if output_fs.exists(output_file):
+                    stat["output_file_exists"] = True
+                    # 对于本地文件，可以获取大小
+                    if not output_file.startswith("tos://"):
+                        stat["output_file_size_bytes"] = os.path.getsize(output_file)
+                else:
+                    stat["output_file_exists"] = False
+            except Exception as e:
+                stat["output_file_exists"] = False
+                stat["output_check_error"] = str(e)
         
         save_progress_stat(progress_stat_file, stat)
         

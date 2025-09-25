@@ -36,9 +36,10 @@ class GitHubRawCodePreprocessor(BasePreprocessor):
     
     def __init__(self, raw_path: str, output_dir: str, stat_dir: str, 
                  fs_cfg: Dict[str, Any], max_tokens: int = 32768, 
-                 num_proc: int = 32, seed: int = 42, num_files: int = -1):
+                 num_proc: int = 32, seed: int = 42, num_files: int = -1,
+                 batch_size: int = 1000):
         
-        super().__init__(raw_path, output_dir, stat_dir, fs_cfg, max_tokens, num_proc)
+        super().__init__(raw_path, output_dir, stat_dir, fs_cfg, max_tokens, num_proc, batch_size)
         
         self.seed = seed
         self.num_files = num_files

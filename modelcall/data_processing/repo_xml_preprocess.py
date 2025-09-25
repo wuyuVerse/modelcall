@@ -14,8 +14,9 @@ from tqdm import tqdm
 import pandas as pd
 import numpy as np
 import re
+from datetime import datetime
 
-from ..utils import get_tos_config, get_filesystem, process_text
+from ..utils import get_tos_config, get_filesystem, process_text, save_progress_stat
 from .base import BasePreprocessor
 
 
@@ -38,9 +39,9 @@ class RepoXMLPreprocessor(BasePreprocessor):
     def __init__(self, raw_path: str, output_dir: str, stat_dir: str, 
                  fs_cfg: Dict[str, Any], max_tokens: int = 32768, 
                  num_proc: int = 32, seed: int = 42, num_files: int = -1,
-                 languages: List[str] = None):
+                 languages: List[str] = None, batch_size: int = 1000):
         
-        super().__init__(raw_path, output_dir, stat_dir, fs_cfg, max_tokens, num_proc)
+        super().__init__(raw_path, output_dir, stat_dir, fs_cfg, max_tokens, num_proc, batch_size)
         
         self.seed = seed
         self.num_files = num_files
@@ -210,14 +211,49 @@ class RepoXMLPreprocessor(BasePreprocessor):
         }
     
     def process_language_files(self, language: str, xml_files: List[str]) -> Tuple[bool, int]:
-        """处理一个语言的所有XML文件，合并为一个Parquet"""
+        """处理一个语言的所有XML文件，合并为一个Parquet，支持分批写入和断点续传"""
         try:
             print(f"Processing {len(xml_files)} {language} files...")
             
-            all_items = []
-            success_count = 0
+            output_path = os.path.join(self.output_dir, f"{language}.parquet")
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
             
-            for xml_file in tqdm(xml_files, desc=f"Processing {language}", unit="files"):
+            # 创建进度状态文件路径
+            progress_file = os.path.join(self.stat_dir, f"{language}_progress.json")
+            
+            # 检查断点续传状态
+            processed_files = set()
+            all_items = []
+            
+            if os.path.exists(output_path) and os.path.exists(progress_file):
+                try:
+                    # 读取已处理的文件列表
+                    with open(progress_file, 'r', encoding='utf-8') as f:
+                        progress_data = json.load(f)
+                    processed_files = set(progress_data.get('processed_files', []))
+                    
+                    # 读取已有的结果
+                    existing_df = pd.read_parquet(output_path)
+                    all_items = existing_df.to_dict('records')
+                    
+                    print(f"📊 断点续传: 已处理 {len(processed_files)} 个文件, 包含 {len(all_items)} 条记录")
+                except Exception as e:
+                    print(f"⚠️ 无法读取断点续传数据: {e}, 从头开始处理")
+                    processed_files = set()
+                    all_items = []
+            
+            # 过滤掉已处理的文件
+            remaining_files = [f for f in xml_files if f not in processed_files]
+            print(f"📁 需要处理 {len(remaining_files)} 个新文件")
+            
+            if not remaining_files:
+                print(f"✅ {language} 语言所有文件已处理完成")
+                return True, len(all_items)
+            
+            # 累积模式处理文件（不是分批，而是累积式保存）
+            items_since_last_save = 0
+            
+            for i, xml_file in enumerate(tqdm(remaining_files, desc=f"Processing {language}", unit="files")):
                 try:
                     # 提取XML内容
                     extracted_data = self.extract_xml_content(xml_file)
@@ -280,28 +316,43 @@ class RepoXMLPreprocessor(BasePreprocessor):
                     item[f'content_truncate_{self.max_tokens//1024}k'] = truncated_text
                     
                     all_items.append(item)
-                    success_count += 1
+                    processed_files.add(xml_file)
+                    items_since_last_save += 1
+                    
+                    # 按批次保存进度（避免频繁IO）
+                    if items_since_last_save >= self.batch_size or i == len(remaining_files) - 1:
+                        # 保存数据文件
+                        df = pd.DataFrame(all_items)
+                        df.to_parquet(output_path, engine='pyarrow')
+                        
+                        # 更新进度文件
+                        progress_data = {
+                            "language": language,
+                            "processed_files": list(processed_files),
+                            "total_items": len(all_items),
+                            "last_update": datetime.now().isoformat(),
+                            "batch_size": self.batch_size
+                        }
+                        
+                        with open(progress_file, 'w', encoding='utf-8') as f:
+                            json.dump(progress_data, f, indent=2, ensure_ascii=False)
+                        
+                        print(f"💾 进度保存: {len(all_items)} 条记录, 处理了 {len(processed_files)} 个文件")
+                        items_since_last_save = 0
                     
                 except Exception as e:
-                    print(f"Failed to process {os.path.basename(xml_file)}: {e}")
+                    print(f"❌ 处理文件失败 {os.path.basename(xml_file)}: {e}")
                     continue
             
             if all_items:
-                # 保存为单个Parquet文件
-                output_path = os.path.join(self.output_dir, f"{language}.parquet")
-                os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                
-                df = pd.DataFrame(all_items)
-                df.to_parquet(output_path, engine='pyarrow')
-                
-                print(f"✅ Saved {len(all_items)} samples to {os.path.basename(output_path)} (Parquet format)")
+                print(f"✅ {language} 处理完成: {len(all_items)} 条记录")
                 return True, len(all_items)
             else:
-                print(f"❌ No valid items found for {language}")
+                print(f"❌ {language} 没有有效数据")
                 return False, 0
             
         except Exception as e:
-            print(f"Failed to process {language} files: {e}")
+            print(f"❌ 处理 {language} 语言失败: {e}")
             return False, 0
     
     def run(self):
@@ -350,16 +401,31 @@ class RepoXMLPreprocessor(BasePreprocessor):
                 n_success_languages += 1
                 total_items += n_items
                 
-                # 保存统计信息
+                # 保存增强的统计信息
+                from datetime import datetime
                 stat = copy.deepcopy(DEFAULT_FILE_STAT)
                 stat["raw_file_path"] = f"{language}_combined"
                 stat["formatted_file_path"] = os.path.join(self.output_dir, f"{language}.parquet")
                 stat["n_sample"] = n_items
+                stat["processing_complete"] = True
+                stat["language"] = language
+                stat["num_xml_files"] = len(xml_files)
+                stat["batch_size"] = self.batch_size
+                stat["max_tokens"] = self.max_tokens
+                stat["processing_time"] = datetime.now().isoformat()
+                
+                # 添加输出文件检查
+                output_file = os.path.join(self.output_dir, f"{language}.parquet")
+                if os.path.exists(output_file):
+                    stat["output_file_exists"] = True
+                    stat["output_file_size_bytes"] = os.path.getsize(output_file)
+                else:
+                    stat["output_file_exists"] = False
                 
                 stat_file = os.path.join(self.stat_dir, f"{language}_combined.json")
                 try:
-                    with open(stat_file, "w", encoding="utf-8") as f:
-                        json.dump(stat, f, indent=2, ensure_ascii=False)
+                    save_progress_stat(stat_file, stat)
+                    print(f"📊 Saved statistics for {language}: {n_items} items")
                 except Exception as e:
                     print(f"Failed to write stat file {stat_file}: {e}")
             else:
