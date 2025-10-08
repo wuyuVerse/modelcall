@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import os
 import asyncio
+import glob
+import re
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 import yaml
 from easydict import EasyDict
@@ -17,6 +19,7 @@ from .logging_manager import setup_logging, cleanup_logging, get_logger
 from .data_processing.universal_preprocessor import create_preprocessor_from_config
 from .data_processing.github_raw_code_preprocess import GitHubRawCodePreprocessor
 from .data_processing.repo_xml_preprocess import RepoXMLPreprocessor
+from .data_processing.triplet_filter_preprocess import TripletFilterPreprocessor
 
 
 class TaskManager:
@@ -38,8 +41,48 @@ class TaskManager:
         ak, sk, endpoint, region = get_tos_config()
         return {"tos": {"ak": ak, "sk": sk, "endpoint": endpoint, "region": region}}
     
+    def _find_latest_output_directory(self, base_output_path: str) -> Optional[str]:
+        """查找最新的输出目录（用于跨时间戳断点续传）"""
+        try:
+            # 移除{timestamp}占位符，获取基础路径
+            base_path = base_output_path.replace("/{timestamp}", "")
+            
+            # 如果是本地路径
+            if base_path.startswith("./") or base_path.startswith("/"):
+                if not os.path.exists(base_path):
+                    return None
+                
+                # 查找所有时间戳目录
+                timestamp_pattern = r"\d{8}_\d{6}"  # YYYYMMDD_HHMMSS
+                dirs = []
+                
+                for item in os.listdir(base_path):
+                    full_path = os.path.join(base_path, item)
+                    if os.path.isdir(full_path) and re.match(timestamp_pattern, item):
+                        dirs.append((item, full_path))
+                
+                if not dirs:
+                    return None
+                
+                # 按时间戳排序，返回最新的
+                dirs.sort(key=lambda x: x[0], reverse=True)
+                latest_dir = dirs[0][1]
+                
+                # 检查目录中是否有parquet文件
+                if glob.glob(os.path.join(latest_dir, "*.parquet")):
+                    return latest_dir
+                    
+            # TODO: 添加对TOS路径的支持
+            return None
+            
+        except Exception as e:
+            logger = get_logger()
+            if logger:
+                logger.warning(f"查找最新输出目录时出错: {e}")
+            return None
+    
     def _resolve_paths(self) -> Dict[str, str]:
-        """解析配置中的路径，支持变量替换"""
+        """解析配置中的路径，支持变量替换和智能断点续传"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
         # 路径变量替换
@@ -55,9 +98,32 @@ class TaskManager:
         output_folder = self.config.data.output_folder
         stat_folder = self.config.data.stat_folder
         
-        for key, value in replacements.items():
-            output_folder = output_folder.replace(key, value)
-            stat_folder = stat_folder.replace(key, value)
+        # 检查是否启用主处理断点续传
+        main_resume = self.config.options.get('main_resume', self.config.options.get('resume', True))
+        
+        if main_resume and "{timestamp}" in output_folder:
+            # 尝试查找最新的输出目录
+            latest_dir = self._find_latest_output_directory(output_folder)
+            if latest_dir:
+                logger = get_logger()
+                if logger:
+                    logger.info(f"🔄 启用跨目录断点续传，使用现有目录: {latest_dir}")
+                output_folder = latest_dir
+                # 相应地更新stat_folder
+                if "{timestamp}" in stat_folder:
+                    # 从latest_dir提取时间戳
+                    dir_name = os.path.basename(latest_dir)
+                    stat_folder = stat_folder.replace("{timestamp}", dir_name)
+            else:
+                # 没有找到现有目录，使用新时间戳
+                for key, value in replacements.items():
+                    output_folder = output_folder.replace(key, value)
+                    stat_folder = stat_folder.replace(key, value)
+        else:
+            # 不启用断点续传或没有时间戳占位符，正常替换
+            for key, value in replacements.items():
+                output_folder = output_folder.replace(key, value)
+                stat_folder = stat_folder.replace(key, value)
         
         # 添加TOS前缀（如果需要）- 只对相对路径（不以tos://、/、.开头）
         if not input_folder.startswith(("tos://", "/", "./")):
@@ -239,15 +305,53 @@ class TaskManager:
                 preprocess_output = f"tos://agi-data/{preprocess_output}"
             
             # 创建预处理器
-            preprocessor = create_preprocessor_from_config(
-                preprocess_config=preprocess_config,
-                raw_path=preprocess_input,
-                output_dir=preprocess_output,
-                stat_dir=os.path.join(paths["stat_folder"], "preprocess"),
-                fs_cfg=self.fs_cfg,
-                max_tokens=preprocess_config.get("max_tokens", 32768),
-                num_proc=preprocess_config.get("num_proc", 32)
-            )
+            script_type = preprocess_config.get("script_type", "universal")
+            
+            if script_type == "github_raw_code":
+                preprocessor = GitHubRawCodePreprocessor(
+                    raw_path=preprocess_input,
+                    output_dir=preprocess_output,
+                    stat_dir=os.path.join(paths["stat_folder"], "preprocess"),
+                    fs_cfg=self.fs_cfg,
+                    max_tokens=preprocess_config.get("max_tokens", 32768),
+                    num_proc=preprocess_config.get("num_proc", 32),
+                    batch_size=preprocess_config.get("batch_size", 1000),
+                    num_files=preprocess_config.get("num_files", -1),
+                    seed=preprocess_config.get("seed", 42)
+                )
+            elif script_type == "repo_xml":
+                preprocessor = RepoXMLPreprocessor(
+                    raw_path=preprocess_input,
+                    output_dir=preprocess_output,
+                    stat_dir=os.path.join(paths["stat_folder"], "preprocess"),
+                    fs_cfg=self.fs_cfg,
+                    max_tokens=preprocess_config.get("max_tokens", 32768),
+                    num_proc=preprocess_config.get("num_proc", 32),
+                    batch_size=preprocess_config.get("batch_size", 500),
+                    languages=preprocess_config.get("languages", None)
+                )
+            elif script_type == "triplet_filter":
+                preprocessor = TripletFilterPreprocessor(
+                    raw_path=preprocess_input,
+                    output_dir=preprocess_output,
+                    stat_dir=os.path.join(paths["stat_folder"], "preprocess"),
+                    fs_cfg=self.fs_cfg,
+                    max_tokens=preprocess_config.get("max_tokens", 32768),
+                    num_proc=preprocess_config.get("num_proc", 16),
+                    batch_size=preprocess_config.get("batch_size", 1000),
+                    group_by_language=preprocess_config.get("group_by_language", True)
+                )
+            else:
+                # 使用通用预处理器
+                preprocessor = create_preprocessor_from_config(
+                    preprocess_config=preprocess_config,
+                    raw_path=preprocess_input,
+                    output_dir=preprocess_output,
+                    stat_dir=os.path.join(paths["stat_folder"], "preprocess"),
+                    fs_cfg=self.fs_cfg,
+                    max_tokens=preprocess_config.get("max_tokens", 32768),
+                    num_proc=preprocess_config.get("num_proc", 32)
+                )
             
             # 运行预处理
             preprocessor.run()
@@ -321,7 +425,7 @@ class TaskManager:
                 debug_items = self.config.debug.max_items_per_file if self.config.debug.enabled else None
                 await processor.process_files(
                     files=files,
-                    resume=self.config.options.resume,
+                    resume=self.config.options.get('main_resume', self.config.options.get('resume', True)),
                     debug_items=debug_items,
                     delete_existing=self.config.options.delete_existing
                 )

@@ -1,0 +1,90 @@
+# =============================================================================
+# 过滤后的RenderGit三元组质量评分任务配置
+# =============================================================================
+
+task_name: "filter_rendergit_quality_rating"
+description: "对过滤后的代码三元组进行RenderGit打包效果质量评分"
+
+# 数据配置
+data:
+  input_folder: "/volume/pt-train/users/wzhang/wjj-workspace/issue2commit/data/pt_data_filtered"  # 输入数据路径
+  output_folder: "/volume/pt-train/users/wzhang/wjj-workspace/modelcall/data/tagged/filter-rendergit-quality/{timestamp}"  # 输出路径
+  stat_folder: "/volume/pt-train/users/wzhang/wjj-workspace/modelcall/data/stats/filter-rendergit-quality"  # 统计路径
+  input_key: "content_truncate_32k"  # 使用截断后的内容作为输入
+  prompt_format_key: "content_truncate_32k"  # 提示词格式化使用截断后的内容
+
+# 预处理配置 - 启用三元组数据预处理
+preprocess:
+  enabled: true                              # 启用预处理
+  script_type: "triplet_filter"              # 使用三元组过滤预处理脚本
+  
+  # 原始数据路径
+  input_folder: "/volume/pt-train/users/wzhang/wjj-workspace/issue2commit/data/pt_data_filtered"
+  # 预处理输出路径
+  output_folder: "/volume/pt-train/users/wzhang/wjj-workspace/modelcall/data/formatted/filter-rendergit-quality"
+  
+  # 预处理参数
+  max_tokens: 32768         # 最大token数
+  num_proc: 16              # 进程数
+  seed: 42                  # 随机种子
+  num_files: -1             # 处理所有文件（-1表示不限制）
+  
+  # 分批写入和内存管理配置
+  batch_size: 1000          # 每1000个项目写入一次
+  
+  # 按语言分组输出 - 一个语言一个parquet文件
+  group_by_language: true   # 启用按语言分组
+
+# 模型配置
+model:
+  config_path: "configs/models/qwen3-coder-480b.yaml"
+  # config_path: "configs/models/dpsk-v3-pro.yaml"  # 备选模型
+  
+# 提示词配置 - 使用代码仓库打包质量评分提示词
+prompt:
+  config_path: "configs/prompts/repo_packaging_quality_rating_v1.0.yaml"
+
+# 环境配置
+environment:
+  config_path: "env/add_qwen3_480b_external.env"  # 指定Qwen3-480B外部API环境
+  # config_path: "env/add_siliconflow_api.env"  # 备选API环境
+  tos_config_path: "env/add_tos_key.env"      # TOS配置
+  timeout: 1200  # API超时时间（秒）
+
+# 并发配置 - 针对大规模数据优化
+concurrency:
+  max_concurrent_files: 1   # 文件并发度
+  max_concurrent_requests: 32  # 请求并发度，控制在API限制内
+  chunk_size: 50            # 批次大小
+  parquet_save_interval: 200  # Parquet保存间隔
+
+# 分布式配置
+distributed:
+  enabled: false
+  world_size: 1
+  
+# 调试配置
+debug:
+  enabled: false            # 禁用调试模式，处理所有数据
+  max_files: -1             # 处理所有文件
+  max_items_per_file: -1    # 处理所有项目
+  # enabled: true             # 启用调试模式（测试时使用）
+  # max_files: 3              # 只处理3个文件
+  # max_items_per_file: 10    # 每个文件只处理10个项目
+
+# 重试配置
+retry:
+  enable_format_validation_retry: true
+  max_retries: 3
+
+# 其他配置
+options:
+  preprocess_resume: true   # 预处理断点续传
+  main_resume: true         # 主处理断点续传（支持跨时间戳目录）
+  delete_existing: false    # 不删除已有文件，配合断点续传使用
+
+# 日志配置
+logging:
+  level: "INFO"
+  batch_size: 50
+  progress_report_interval: 5
