@@ -13,13 +13,9 @@ from typing import Dict, Any, Optional, List
 import yaml
 from easydict import EasyDict
 
-from .pipeline.concurrent_processor import ConcurrentFileProcessor
-from .utils import get_tos_config
-from .logging_manager import setup_logging, cleanup_logging, get_logger
-from .data_processing.universal_preprocessor import create_preprocessor_from_config
-from .data_processing.github_raw_code_preprocess import GitHubRawCodePreprocessor
-from .data_processing.repo_xml_preprocess import RepoXMLPreprocessor
-from .data_processing.triplet_filter_preprocess import TripletFilterPreprocessor
+from ..common.utils import get_tos_config
+from .logging import setup_logging, cleanup_logging, get_logger
+from .task_runners import PreprocessRunner, ScoringTaskRunner, DistillationTaskRunner
 
 
 class TaskManager:
@@ -189,179 +185,55 @@ class TaskManager:
                     value = value.strip('"\'')
                     os.environ[key] = value
     
-    def create_processor(self, job_index: int = 0, world_size: int = 1, run_index: int = 1) -> ConcurrentFileProcessor:
-        """创建处理器实例"""
+    def create_processor(self, job_index: int = 0, world_size: int = 1, run_index: int = 1):
+        """创建处理器实例（向后兼容）"""
         paths = self._resolve_paths()
+        logger = get_logger()
         
-        # 如果是多轮运行，调整输出路径
-        if self.config.distributed.get("num_runs", 1) > 1:
-            output_folder = paths["output_folder"].replace("{run_index}", str(run_index))
-            paths["output_folder"] = output_folder
-        
-        # 创建处理器
-        processor = ConcurrentFileProcessor(
-            input_folder=paths["input_folder"],
-            output_folder=paths["output_folder"],
-            stat_folder=paths["stat_folder"],
-            model_config_path=paths["model_config_path"],
-            prompt_config_path=paths["prompt_config_path"],
+        # 创建评分任务执行器并获取处理器
+        scoring_runner = ScoringTaskRunner(
+            config=self.config,
+            logger=logger,
             fs_cfg=self.fs_cfg,
-            max_concurrent_files=self.config.concurrency.max_concurrent_files,
-            max_concurrent_requests=self.config.concurrency.max_concurrent_requests,
-            chunk_size=self.config.concurrency.chunk_size,
-            parquet_save_interval=self.config.concurrency.parquet_save_interval,
-            input_key=self.config.data.input_key,
-            prompt_format_key=self.config.data.prompt_format_key,
-            enable_format_validation_retry=self.config.retry.enable_format_validation_retry
+            paths=paths
         )
         
-        return processor
+        return scoring_runner.create_processor(job_index, world_size, run_index)
     
     async def run_preprocess(self, job_index: int = 0, world_size: int = None) -> None:
         """运行预处理任务"""
         if world_size is None:
             world_size = self.config.distributed.get("world_size", 1)
         
-        preprocess_config = self.config.get("preprocess")
-        if not preprocess_config:
-            return
-        
-        logger = get_logger()
-        if logger:
-            logger.info("🔧 开始数据预处理...")
-        
-        # 解析预处理路径
         paths = self._resolve_paths()
-        preprocess_input = preprocess_config.get("input_folder", paths["input_folder"])
-        preprocess_output = preprocess_config.get("output_folder", paths["input_folder"] + "_preprocessed")
+        logger = get_logger()
         
-        # 检查是否使用自定义脚本
-        script_type = preprocess_config.get("script_type", "universal")
+        # 创建预处理执行器并运行
+        preprocess_runner = PreprocessRunner(
+            config=self.config,
+            logger=logger,
+            fs_cfg=self.fs_cfg,
+            paths=paths
+        )
         
-        if script_type == "github_raw_code":
-            # 使用GitHub原始代码预处理脚本
-            if logger:
-                logger.info("🔧 使用GitHub原始代码预处理脚本")
-            
-            # 处理调试模式的文件限制
-            debug_max_files = None
-            if self.config.debug.enabled and hasattr(self.config.debug, 'max_files'):
-                debug_max_files = self.config.debug.max_files
-            
-            num_files = debug_max_files if debug_max_files is not None else preprocess_config.get("num_files", -1)
-            
-            preprocessor = GitHubRawCodePreprocessor(
-                raw_path=preprocess_input,
-                output_dir=preprocess_output.replace("tos://agi-data/", ""),  # 移除前缀
-                stat_dir=os.path.join(paths["stat_folder"], "preprocess"),
-                fs_cfg=self.fs_cfg,
-                max_tokens=preprocess_config.get("max_tokens", 32768),
-                num_proc=preprocess_config.get("num_proc", 32),
-                seed=preprocess_config.get("seed", 42),
-                num_files=num_files,
-                batch_size=preprocess_config.get("batch_size", 1000)
-            )
-            
-            # 运行预处理
-            preprocessor.run()
-            
-        elif script_type == "repo_xml":
-            # 使用代码仓库XML/CXML预处理脚本
-            if logger:
-                logger.info("🔧 使用代码仓库XML/CXML预处理脚本")
-            
-            # 处理调试模式的文件限制
-            debug_max_files = None
-            if self.config.debug.enabled and hasattr(self.config.debug, 'max_files'):
-                debug_max_files = self.config.debug.max_files
-            
-            num_files = debug_max_files if debug_max_files is not None else preprocess_config.get("num_files", -1)
-            
-            preprocessor = RepoXMLPreprocessor(
-                raw_path=preprocess_input,
-                output_dir=preprocess_output.replace("tos://agi-data/", ""),  # 移除前缀
-                stat_dir=os.path.join(paths["stat_folder"], "preprocess"),
-                fs_cfg=self.fs_cfg,
-                max_tokens=preprocess_config.get("max_tokens", 32768),
-                num_proc=preprocess_config.get("num_proc", 16),
-                seed=preprocess_config.get("seed", 42),
-                num_files=num_files,
-                languages=preprocess_config.get("languages"),
-                batch_size=preprocess_config.get("batch_size", 1000)
-            )
-            
-            # 运行预处理
-            preprocessor.run()
-            
-        else:
-            # 使用通用预处理器
-            if logger:
-                logger.info("🔧 使用通用预处理器")
-            
-            # 添加TOS前缀
-            if not preprocess_input.startswith(("tos://", "/", ".")):
-                preprocess_input = f"tos://agi-data/{preprocess_input}"
-            if not preprocess_output.startswith(("tos://", "/", ".")):
-                preprocess_output = f"tos://agi-data/{preprocess_output}"
-            
-            # 创建预处理器
-            script_type = preprocess_config.get("script_type", "universal")
-            
-            if script_type == "github_raw_code":
-                preprocessor = GitHubRawCodePreprocessor(
-                    raw_path=preprocess_input,
-                    output_dir=preprocess_output,
-                    stat_dir=os.path.join(paths["stat_folder"], "preprocess"),
-                    fs_cfg=self.fs_cfg,
-                    max_tokens=preprocess_config.get("max_tokens", 32768),
-                    num_proc=preprocess_config.get("num_proc", 32),
-                    batch_size=preprocess_config.get("batch_size", 1000),
-                    num_files=preprocess_config.get("num_files", -1),
-                    seed=preprocess_config.get("seed", 42)
-                )
-            elif script_type == "repo_xml":
-                preprocessor = RepoXMLPreprocessor(
-                    raw_path=preprocess_input,
-                    output_dir=preprocess_output,
-                    stat_dir=os.path.join(paths["stat_folder"], "preprocess"),
-                    fs_cfg=self.fs_cfg,
-                    max_tokens=preprocess_config.get("max_tokens", 32768),
-                    num_proc=preprocess_config.get("num_proc", 32),
-                    batch_size=preprocess_config.get("batch_size", 500),
-                    languages=preprocess_config.get("languages", None)
-                )
-            elif script_type == "triplet_filter":
-                preprocessor = TripletFilterPreprocessor(
-                    raw_path=preprocess_input,
-                    output_dir=preprocess_output,
-                    stat_dir=os.path.join(paths["stat_folder"], "preprocess"),
-                    fs_cfg=self.fs_cfg,
-                    max_tokens=preprocess_config.get("max_tokens", 32768),
-                    num_proc=preprocess_config.get("num_proc", 16),
-                    batch_size=preprocess_config.get("batch_size", 1000),
-                    group_by_language=preprocess_config.get("group_by_language", True)
-                )
-            else:
-                # 使用通用预处理器
-                preprocessor = create_preprocessor_from_config(
-                    preprocess_config=preprocess_config,
-                    raw_path=preprocess_input,
-                    output_dir=preprocess_output,
-                    stat_dir=os.path.join(paths["stat_folder"], "preprocess"),
-                    fs_cfg=self.fs_cfg,
-                    max_tokens=preprocess_config.get("max_tokens", 32768),
-                    num_proc=preprocess_config.get("num_proc", 32)
-                )
-            
-            # 运行预处理
-            preprocessor.run()
+        preprocess_output = await preprocess_runner.run(job_index, world_size)
         
-        if logger:
-            logger.info("✅ 数据预处理完成")
+        # 更新配置（如果有输出）
+        if preprocess_output:
+            self.config.data.input_folder = preprocess_output
+
+    async def run_distillation_task(self, job_index: int = 0, world_size: int = None) -> None:
+        """运行数据蒸馏任务"""
+        logger = get_logger()
         
-        # 更新任务配置中的输入路径为预处理后的路径
-        # 保持预处理输出路径的原始格式（本地/TOS）
-        self.config.data.input_folder = preprocess_output
+        # 创建数据蒸馏执行器并运行
+        distillation_runner = DistillationTaskRunner(
+            config=self.config,
+            logger=logger,
+            fs_cfg=self.fs_cfg
+        )
+        
+        await distillation_runner.run(job_index, world_size)
 
     async def run_task(self, job_index: int = 0, world_size: int = None) -> None:
         """运行任务（包括可选的预处理）"""
@@ -385,52 +257,32 @@ class TaskManager:
         try:
             self._setup_environment()
             
+            task_type = self.config.get('task_type', 'unknown')
+            logger.info(f"📋 任务类型: {task_type}")
             logger.info(f"📋 任务描述: {self.config.description}")
             
-            # 检查是否启用分布式
-            if self.config.distributed.get("enabled", False) and world_size > 1:
-                logger.info(f"🔀 分布式模式已启用")
+            # 根据任务类型分发到不同的处理逻辑
+            if task_type == "data_distillation":
+                # 数据蒸馏任务
+                await self.run_distillation_task(job_index, world_size)
+                logger.info(f"🎉 任务 {self.config.task_name} 执行完成!")
+                return
             
+            # 数据评分任务的处理逻辑
             # 运行预处理（如果配置了）
             if self.config.get("preprocess") and self.config.preprocess.get("enabled", False):
                 await self.run_preprocess(job_index, world_size)
             
-            # 多轮运行支持
-            num_runs = self.config.distributed.get("num_runs", 1)
+            # 创建评分任务执行器并运行
+            paths = self._resolve_paths()
+            scoring_runner = ScoringTaskRunner(
+                config=self.config,
+                logger=logger,
+                fs_cfg=self.fs_cfg,
+                paths=paths
+            )
             
-            for run_index in range(1, num_runs + 1):
-                if num_runs > 1:
-                    logger.info(f"🎯 === 第 {run_index}/{num_runs} 轮运行 ===")
-                
-                # 创建处理器
-                processor = self.create_processor(job_index, world_size, run_index)
-                
-                # 获取要处理的文件
-                debug_files = self.config.debug.max_files if self.config.debug.enabled else None
-                files = processor.get_files_to_process(
-                    debug_files=debug_files,
-                    job_index=job_index,
-                    world_size=world_size
-                )
-                
-                if not files:
-                    logger.warning(f"没有找到要处理的文件 (Job {job_index}/{world_size})")
-                    continue
-                
-                # 更新统计信息
-                logger.update_stats(total_files=len(files))
-                logger.info(f"📁 找到 {len(files)} 个文件需要处理")
-                
-                # 运行处理
-                debug_items = self.config.debug.max_items_per_file if self.config.debug.enabled else None
-                await processor.process_files(
-                    files=files,
-                    resume=self.config.options.get('main_resume', self.config.options.get('resume', True)),
-                    debug_items=debug_items,
-                    delete_existing=self.config.options.delete_existing
-                )
-                
-                logger.info(f"✅ 第 {run_index} 轮运行完成")
+            await scoring_runner.run(job_index, world_size)
             
             logger.info(f"🎉 任务 {self.config.task_name} 执行完成!")
             
@@ -442,8 +294,22 @@ class TaskManager:
         """打印配置摘要"""
         print(f"\n📋 任务配置摘要:")
         print(f"   任务名称: {self.config.task_name}")
+        
+        task_type = self.config.get('task_type', 'unknown')
+        print(f"   任务类型: {task_type}")
         print(f"   任务描述: {self.config.description}")
         
+        # 数据蒸馏任务的配置摘要
+        if task_type == "data_distillation":
+            distillation_config = self.config.get("distillation", {})
+            print(f"   蒸馏步骤: {distillation_config.get('step', 'unknown')}")
+            print(f"   输入目录: {distillation_config.get('input_dir', 'N/A')}")
+            print(f"   输出目录: {distillation_config.get('output_dir', 'N/A')}")
+            print(f"   并行进程数: {distillation_config.get('num_processes', 'N/A')}")
+            print(f"   断点续传: {'启用' if distillation_config.get('continue_mode', True) else '禁用'}")
+            return
+        
+        # 数据评分任务的配置摘要
         paths = self._resolve_paths()
         print(f"   输入路径: {paths['input_folder']}")
         print(f"   输出路径: {paths['output_folder']}")

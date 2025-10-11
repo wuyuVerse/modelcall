@@ -15,8 +15,8 @@ from tqdm import tqdm
 import tiktoken
 import pandas as pd
 
-from ..utils import DEFAULT_FILE_STAT, save_progress_stat, load_progress_stat, get_filesystem, process_text
-from ..data_io import DataReader, DataWriter
+from ..common.utils import DEFAULT_FILE_STAT, save_progress_stat, load_progress_stat, get_filesystem, process_text
+from ..common.data_io import DataReader, DataWriter
 
 
 class BasePreprocessor:

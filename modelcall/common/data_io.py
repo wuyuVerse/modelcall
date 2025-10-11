@@ -7,7 +7,7 @@ import pandas as pd
 from typing import Iterable, Dict, Any, Union, BinaryIO
 from pathlib import Path
 
-from .fs.base import FileSystem
+from ..fs.base import FileSystem
 
 
 class DataReader:
@@ -95,3 +95,36 @@ class DataWriter:
         df = pd.DataFrame(list(data))
         with self.fs.open(path, "wb") as f:
             df.to_parquet(f, engine='pyarrow', index=False)
+
+
+# Convenience functions using local filesystem
+def read_jsonl(path: str) -> Iterable[Dict[str, Any]]:
+    """Read JSONL file from local filesystem."""
+    with open(path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            yield json.loads(line)
+
+
+def write_jsonl(path: str, data: Iterable[Dict[str, Any]]) -> None:
+    """Write JSONL file to local filesystem."""
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
+        for obj in data:
+            f.write(json.dumps(obj, ensure_ascii=False) + '\n')
+
+
+def read_parquet(path: str) -> Iterable[Dict[str, Any]]:
+    """Read Parquet file from local filesystem."""
+    df = pd.read_parquet(path)
+    for _, row in df.iterrows():
+        yield row.to_dict()
+
+
+def write_parquet(path: str, data: Iterable[Dict[str, Any]]) -> None:
+    """Write Parquet file to local filesystem."""
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    df = pd.DataFrame(list(data))
+    df.to_parquet(path, engine='pyarrow', index=False)

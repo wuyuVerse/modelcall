@@ -1,0 +1,40 @@
+# =============================================================================
+# 数据蒸馏任务配置模板 - JSONL文件合并
+# =============================================================================
+
+task_name: "my_jsonl_merge"  # 修改：任务唯一标识
+task_type: "data_distillation"  # 固定：任务类型
+description: "合并多个JSONL文件"  # 修改：任务描述
+
+# 数据蒸馏配置
+distillation:
+  step: "jsonl_merge"  # 固定：步骤名称
+  
+  # 合并配置文件路径
+  merge_config_path: "configs/distillation/merge_groups.yaml"  # 修改：合并配置
+  
+  # 输入输出目录
+  base_input_dir: "/path/to/input/jsonl/"  # 修改：输入文件基础目录
+  base_output_dir: "/path/to/output/merged/"  # 修改：输出文件基础目录
+  
+  # 处理选项
+  chunk_size: 1000  # 分块写入大小
+  
+  # 要执行的合并组（在merge_groups.yaml中定义）
+  merge_groups:
+    - "group_name_1"  # 修改：要执行的合并组名称
+    - "group_name_2"
+  # merge_groups: []  # 空列表表示执行所有组
+
+# 日志配置
+logging:
+  level: "INFO"
+  batch_size: 100
+  progress_report_interval: 10
+
+# 调试配置
+debug:
+  enabled: false
+  max_files: -1
+  max_items_per_file: -1
+

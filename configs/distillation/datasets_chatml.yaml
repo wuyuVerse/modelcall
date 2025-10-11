@@ -1,0 +1,125 @@
+# =============================================================================
+# ChatML格式转换 - 数据集配置
+# =============================================================================
+# 本配置文件定义了各种数据集的格式和列映射关系
+
+BAAI/Infinity-Instruct:
+  configs:
+    - "3M"
+    - "7M_core"
+    - "7M"
+    - "0625"
+    - "7M_domains"
+    - "Gen"
+  format_style: "sharegpt"
+  column_mapping:
+    conversations: "conversations"
+
+OpenCoder-LLM/opc-sft-stage1:
+  configs:
+    - "filtered_infinity_instruct"
+    - "largescale_diverse_instruct"
+    - "realuser_instruct"
+  format_style: "prompt_response"
+  column_mapping:
+    prompt: "instruction"
+    response: "output"
+
+OpenCoder-LLM/opc-sft-stage2:
+  configs:
+    - "educational_instruct"
+    - "evol_instruct"
+    - "mceval_instruct"
+    - "package_instruct"
+  format_style: "prompt_response"
+  column_mapping:
+    prompt: "instruction"
+    response: "output"
+
+nvidia/AceReason-1.1-SFT:
+  configs:
+    - null
+  format_style: "prompt_response"
+  column_mapping:
+    prompt: "input"
+    response: "output"
+
+nvidia/AceReason-Math:
+  configs:
+    - null
+  format_style: "prompt_response"
+  column_mapping:
+    prompt: "problem"
+    response: "answer"
+
+nvidia/OpenCodeReasoning:
+  configs:
+    - "split_0"
+    - "split_1"
+  format_style: "prompt_response"
+  column_mapping:
+    prompt: "input"
+    response: "output"
+
+nvidia/OpenMathReasoning:
+  configs:
+    - null
+  format_style: "prompt_response"
+  column_mapping:
+    prompt: "problem"
+    response: "generated_solution"
+
+nvidia/Llama-Nemotron-Post-Training-Dataset:
+  configs:
+    - "SFT"
+    - "RL"
+  format_style: "input_output_messages"
+  column_mapping:
+    input: "input"
+    output: "output"
+
+nvidia/Aegis-AI-Content-Safety-Dataset-2.0:
+  configs:
+    - null
+  format_style: "prompt_response"
+  column_mapping:
+    prompt: "prompt"
+    response: "response"
+
+nvidia/CantTalkAboutThis-Topic-Control-Dataset:
+  configs:
+    - null
+  format_style: "messages"
+  column_mapping:
+    messages: "conversation"
+
+nvidia/CantTalkAboutThis-Topic-Control-Dataset-NC:
+  configs:
+    - null
+  format_style: "messages"
+  column_mapping:
+    messages: "conversation"
+
+nvidia/Nemotron-Post-Training-Dataset-v1:
+  configs:
+    - null
+  format_style: "messages"
+  column_mapping:
+    messages: "messages"
+
+ed001/ds-coder-instruct-v1:
+  configs:
+    - null
+  format_style: "instruction_input"
+  column_mapping:
+    prompt: "instruction"
+    input: "input"
+    response: "output"
+
+finbarr/tulu-3-sft-personas-code-o3:
+  configs:
+    - null
+  format_style: "messages"
+  column_mapping:
+    messages: "messages"
+

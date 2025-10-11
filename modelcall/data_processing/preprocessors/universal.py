@@ -9,9 +9,9 @@ from uuid import uuid4
 from typing import Dict, Any, List, Optional, Callable
 from pathlib import Path
 
-from .base import BasePreprocessor
-from ..common.utils import process_text
-from ..core.logging import get_logger
+from ..base import BasePreprocessor
+from ...common.utils import process_text
+from ...core.logging import get_logger
 
 import tiktoken
 

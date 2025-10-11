@@ -1,0 +1,40 @@
+# =============================================================================
+# ChatML格式转换任务配置（带System Prompt）- 数据蒸馏第一步
+# =============================================================================
+
+task_name: "chatml_conversion_with_system"
+task_type: "data_distillation"  # 任务类型：数据蒸馏
+description: "将多种数据集格式转换为统一的ChatML格式（带System Prompt）"
+
+# 数据蒸馏配置
+distillation:
+  step: "chatml_conversion"  # 蒸馏步骤：ChatML格式转换
+  
+  # 数据集配置文件路径
+  dataset_config_path: "configs/distillation/datasets_chatml.yaml"
+  
+  # 输入输出路径
+  input_dir: "/volume/pt-train/users/wzhang/hf/datasets/"
+  output_dir: "/volume/pt-train/users/wzhang/coder/coder-data/dataset/hf-system"
+  
+  # 处理选项
+  num_processes: 176  # 并行进程数
+  keep_raw_data: true  # 保留原始数据
+  continue_mode: true  # 跳过已存在的文件（断点续传）
+  
+  # System Prompt配置
+  add_system_prompt: true  # 添加system prompt
+  system_prompt: "You are a helpful assistant and an expert coder."
+
+# 日志配置
+logging:
+  level: "INFO"
+  batch_size: 100
+  progress_report_interval: 10
+
+# 调试配置
+debug:
+  enabled: false  # 生产模式
+  max_files: -1
+  max_items_per_file: -1
+

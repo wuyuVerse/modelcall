@@ -1,27 +1,28 @@
 # =============================================================================
-# RenderGit打包效果质量评分任务配置
+# Repomix打包效果质量评分任务配置
 # =============================================================================
 
-task_name: "rendergit_quality_rating"
-description: "评估RenderGit工具对代码仓库的打包效果质量"
+task_name: "repomix_quality_rating"
+task_type: "data_scoring"  # 任务类型：数据评分
+description: "评估Repomix工具对代码仓库的打包效果质量"
 
 # 数据配置
 data:
-  input_folder: "./data/formatted/rendergit-quality"  # 预处理后的数据（本地路径）
-  output_folder: "./data/tagged/rendergit-quality/{timestamp}"
-  stat_folder: "./data/stats/rendergit-quality"
+  input_folder: "./data/formatted/repomix-quality"  # 预处理后的数据（本地路径）
+  output_folder: "./data/tagged/repomix-quality/{timestamp}"
+  stat_folder: "./data/stats/repomix-quality"
   input_key: "content_truncate_32k"  # 使用截断后的内容
   prompt_format_key: "content_truncate_32k"
 
-# 预处理配置 - 启用RenderGit CXML预处理
+# 预处理配置 - 启用Repomix XML预处理
 preprocess:
   enabled: true                              # 启用预处理
   script_type: "repo_xml"                    # 使用代码仓库XML/CXML预处理脚本
   
   # 原始数据路径
-  input_folder: "/volume/pt-train/users/wzhang/wjj-workspace/issue2commit/data/rendergit_output"
+  input_folder: "/volume/pt-train/users/wzhang/wjj-workspace/issue2commit/data/repomix_output"
   # 预处理输出路径
-  output_folder: "./data/formatted/rendergit-quality"
+  output_folder: "./data/formatted/repomix-quality"
   
   # 预处理参数
   max_tokens: 32768         # 最大token数
@@ -30,32 +31,35 @@ preprocess:
   num_files: -1             # 处理所有文件（-1表示不限制）
   
   # 新增：分批写入和内存管理配置
-  batch_size: 500           # 每500个CXML文件写入一次，避免内存溢出
+  batch_size: 500           # 每500个XML文件写入一次，避免内存溢出
                             # 可根据内存情况调整：内存大调高，内存小调低
   
   # 指定处理的编程语言（可选，不指定则处理全部）
-  # languages: ["Clojure"]  # 可以指定特定语言
+  # languages: ["Arduino"]  # 注释掉以处理所有语言
 
-# 模型配置 - 使用Qwen3-Coder-480B
+# 模型配置
 model:
   config_path: "configs/models/qwen3-coder-480b.yaml"
+
+  # config_path: "configs/models/dpsk-v3-pro.yaml"
   
-# 提示词配置 (与Repomix共用)
+# 提示词配置  
 prompt:
   config_path: "configs/prompts/repo_packaging_quality_rating_v1.0.yaml"
 
-# 环境配置 - 使用Qwen3-480B外部API
+# 环境配置
 environment:
   config_path: "env/add_qwen3_480b_external.env"  # 指定Qwen3-480B外部API环境
+  # config_path: "env/add_siliconflow_api.env"  # 指定SiliconFlow API环境
   tos_config_path: "env/add_tos_key.env"      # 单独的TOS配置
-  timeout: 180  # API超时时间（秒）- 480B模型需要更长处理时间
+  timeout: 1200  # API超时时间（秒）
 
-# 并发配置 - 针对Qwen3-480B超大模型优化
+# 并发配置 - 针对512 RPM限制优化
 concurrency:
   max_concurrent_files: 1   # 降低文件并发度，减少内存压力
-  max_concurrent_requests: 64  # 480B模型处理较慢，降低并发避免超时
-  chunk_size: 64            # 减小批次大小，适应超大模型处理速度
-  parquet_save_interval: 50   # 更频繁保存，避免数据丢失
+  max_concurrent_requests: 64  # 严格控制在512 RPM以内 (20*3秒*60/60 ≈ 400 RPM)
+  chunk_size: 32            # 降低批次大小，避免突发流量
+  parquet_save_interval: 100
 
 # 分布式配置
 distributed:
@@ -78,7 +82,8 @@ retry:
 
 # 其他配置
 options:
-  resume: true              # 支持断点续传（预处理和主处理都支持）
+  preprocess_resume: true   # 预处理断点续传
+  main_resume: true         # 主处理断点续传（支持跨时间戳目录）
   delete_existing: false    # 不删除已有文件，配合断点续传使用
 
 # 日志配置

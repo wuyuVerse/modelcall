@@ -14,8 +14,8 @@ import pandas as pd
 import numpy as np
 import tiktoken
 
-from ..common.utils import get_tos_config, get_filesystem, process_text
-from .base import BasePreprocessor
+from ...common.utils import get_tos_config, get_filesystem, process_text
+from ..base import BasePreprocessor
 
 
 DEFAULT_FILE_STAT = {

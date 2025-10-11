@@ -14,10 +14,10 @@ from uuid import uuid4
 from tqdm.asyncio import tqdm
 import pandas as pd
 
-from ..utils import get_filesystem, save_progress_stat, load_progress_stat, DEFAULT_FILE_STAT
-from ..data_io import DataReader, DataWriter
+from ..common.utils import get_filesystem, save_progress_stat, load_progress_stat, DEFAULT_FILE_STAT
+from ..common.data_io import DataReader, DataWriter
 from .api_scorer import APIScorer, ConcurrentAPIScorer
-from ..logging_manager import get_logger
+from ..core.logging import get_logger
 
 
 class ConcurrentFileProcessor:

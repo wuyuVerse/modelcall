@@ -1,16 +1,20 @@
-# --------------------------------------------------------------------------
 # Qwen3-Coder-480B-A35B-Instruct Model Configuration
-# --------------------------------------------------------------------------
 # 超大规模代码专用模型，适合代码质量评估和分析任务
-provider: "qwen3-external"
-model_name: "/volume/pt-train/models/Qwen3-Coder-480B-A35B-Instruct"
 
-# 严格跟 client.chat.completions.create() 的参数名保持一致
-completions_params:
-  temperature: 0.3          # 较低温度确保一致性
-  max_tokens: 1024          # 增加输出长度，适合详细代码分析
-  top_p: 0.9               # 适中的采样参数
-  
+client_config:
+  # 根据实际部署选择 base_url
+  base_url: "http://qwen3-480b-0.t-skyinfer-fjing.svc.cluster.local"
+  # 或外部访问: "https://console.siflow.cn/siflow/auriga/skyinfer/fjing/qwen3-480b-0/v1"
+  api_key: "EMPTY"
+  timeout: 600
+  max_retries: 3
+
+chat_config:
+  model: "/volume/pt-train/models/Qwen3-Coder-480B-A35B-Instruct"
+  temperature: 0.3    # 较低温度确保一致性
+  max_tokens: 1024    # 增加输出长度，适合详细代码分析
+  top_p: 0.9         # 适中的采样参数
+
 # 模型特性说明
 # - 参数量: 480B 超大规模
 # - 专长: 代码理解、逻辑推理、多语言编程

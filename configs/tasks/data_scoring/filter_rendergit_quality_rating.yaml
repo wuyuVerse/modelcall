@@ -3,6 +3,7 @@
 # =============================================================================
 
 task_name: "filter_rendergit_quality_rating"
+task_type: "data_scoring"  # 任务类型：数据评分
 description: "对过滤后的代码三元组进行RenderGit打包效果质量评分"
 
 # 数据配置

@@ -1,12 +1,15 @@
-# --------------------------------------------------------------------------
-# 2. Model Configuration: 定义调用模型时使用的参数，确保结果可复现
-# --------------------------------------------------------------------------
-# model_config:
-provider: "deepseek-ai"  # 例如: "google", "openai", "anthropic"
-model_name: "Pro/deepseek-ai/DeepSeek-V3"
-# model_name: "deepseek-ai/DeepSeek-V3"
-# 严格跟 client.chat.completions.create() 的参数名保持一致，可以直接覆盖
-completions_params:
+# DeepSeek V3 Pro Configuration
+# Pro版本，提供更好的性能
+
+client_config:
+  base_url: "http://generalsvc-dpsk-v3-gpu128-train.t-skyinfer-yzli02.svc.cluster.local:30000/v1"
+  api_key: "EMPTY"
+  timeout: 600
+  max_retries: 3
+
+chat_config:
+  model: "Pro/deepseek-ai/DeepSeek-V3"
+  # model: "deepseek-ai/DeepSeek-V3"  # 备选标准版本
   temperature: 0.6  # 较低的温度适用于需要事实性、确定性输出的场景
   max_tokens: 512
   # top_p: 0.95  # 其他可以控制模型输出的参数

@@ -13,8 +13,8 @@ from collections import defaultdict
 
 import pandas as pd
 
-from .base import BasePreprocessor
-from ..common.utils import get_filesystem, process_text
+from ..base import BasePreprocessor
+from ...common.utils import get_filesystem, process_text
 
 
 class TripletFilterPreprocessor(BasePreprocessor):
@@ -113,7 +113,7 @@ class TripletFilterPreprocessor(BasePreprocessor):
             
             # 处理数据
             fs = get_filesystem(output_path, self.fs_cfg)
-            from ..common.data_io import DataWriter
+            from ...common.data_io import DataWriter
             writer = DataWriter(fs)
             
             return self.process_data_with_batching(all_data, output_path, writer)
@@ -169,7 +169,7 @@ class TripletFilterPreprocessor(BasePreprocessor):
         processing_time = (end_time - start_time).total_seconds()
         
         # 保存进度统计
-        from ..common.utils import DEFAULT_FILE_STAT, save_progress_stat
+        from ...common.utils import DEFAULT_FILE_STAT, save_progress_stat
         stat = copy.deepcopy(DEFAULT_FILE_STAT)
         stat["raw_file_path"] = f"Language: {language}"
         stat["formatted_file_path"] = output_file if success else ""
@@ -190,7 +190,7 @@ class TripletFilterPreprocessor(BasePreprocessor):
 def main():
     """命令行入口"""
     import argparse
-    from ..common.utils import get_tos_config
+    from ...common.utils import get_tos_config
     
     parser = argparse.ArgumentParser(description="Triplet filter data preprocessing")
     parser.add_argument("--raw_path", type=str, required=True,

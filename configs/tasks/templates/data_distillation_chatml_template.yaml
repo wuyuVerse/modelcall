@@ -1,0 +1,45 @@
+# =============================================================================
+# 数据蒸馏任务配置模板 - ChatML格式转换
+# =============================================================================
+# 使用方法：
+# 1. 复制此模板到 configs/tasks/data_distillation/ 目录
+# 2. 重命名为你的任务名称
+# 3. 修改下面的配置项
+# 4. 运行：python -m modelcall run-task configs/tasks/data_distillation/your_task.yaml
+
+task_name: "my_chatml_conversion"  # 修改：任务唯一标识
+task_type: "data_distillation"  # 固定：任务类型
+description: "将数据集转换为ChatML格式"  # 修改：任务描述
+
+# 数据蒸馏配置
+distillation:
+  step: "chatml_conversion"  # 固定：步骤名称
+  
+  # 数据集配置文件路径
+  dataset_config_path: "configs/distillation/datasets_chatml.yaml"  # 修改：数据集配置
+  
+  # 输入输出路径
+  input_dir: "/path/to/hf/datasets/"  # 修改：HuggingFace数据集目录
+  output_dir: "/path/to/output/chatml/"  # 修改：输出目录
+  
+  # 处理选项
+  num_processes: 32  # 修改：并行进程数
+  keep_raw_data: true  # 是否保留原始数据
+  continue_mode: true  # 是否启用断点续传
+  
+  # System Prompt配置
+  add_system_prompt: false  # 是否添加system prompt
+  system_prompt: "You are a helpful assistant."  # System prompt内容
+
+# 日志配置
+logging:
+  level: "INFO"
+  batch_size: 100
+  progress_report_interval: 10
+
+# 调试配置
+debug:
+  enabled: false
+  max_files: -1
+  max_items_per_file: -1
+

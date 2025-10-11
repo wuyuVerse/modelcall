@@ -1,0 +1,37 @@
+# =============================================================================
+# 数据蒸馏任务配置模板 - 响应生成
+# =============================================================================
+
+task_name: "my_response_generation"  # 修改：任务唯一标识
+task_type: "data_distillation"  # 固定：任务类型
+description: "使用大模型生成响应"  # 修改：任务描述
+
+# 数据蒸馏配置
+distillation:
+  step: "generate_response"  # 固定：步骤名称
+  
+  # 响应生成配置文件路径
+  response_config_path: "configs/distillation/response_config.yaml"  # 修改：API和模型配置
+  
+  # 输入输出路径
+  input_path: "/path/to/input.jsonl"  # 修改：输入JSONL文件
+  output_path: "/path/to/output/"  # 修改：输出目录
+  
+  # 处理选项
+  concurrency: 100  # 修改：并发数量
+  batch_size: 100  # 修改：批量保存大小
+  flush_interval_secs: 2.0  # 定时刷新间隔（秒）
+  retry_mode: false  # 是否为重试模式（首次运行设为false）
+
+# 日志配置
+logging:
+  level: "INFO"
+  batch_size: 100
+  progress_report_interval: 10
+
+# 调试配置
+debug:
+  enabled: false
+  max_files: -1
+  max_items_per_file: -1
+

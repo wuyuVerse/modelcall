@@ -1,0 +1,14 @@
+# Claude Sonnet 4.5 with Thinking Mode Configuration
+
+client_config:
+  base_url: "https://api.vectortara.com/v1"
+  api_key: "sk-rxxCtIlp0rB2inE_MaMNwnIh84oqQknQE2rfQ1MKVEWWL78mbPZstWgfUjI"
+  timeout: 600
+  max_retries: 3
+
+chat_config:
+  model: "claude-sonnet-4-5-20250929-thinking"
+  temperature: 0.7
+  max_tokens: 8000
+  stream: false
+

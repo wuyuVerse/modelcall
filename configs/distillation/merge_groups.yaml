@@ -1,0 +1,33 @@
+# =============================================================================
+# JSONL文件合并配置 - 定义合并任务组
+# =============================================================================
+# 每个任务组包含：
+#   - name: 任务组名称
+#   - output_file: 合并后的输出文件名
+#   - input_files: 待合并的输入文件列表（相对于base_input_dir）
+
+merge_groups:
+  # OpenCoder Stage 1 合并
+  - name: "opc-sft-stage1"
+    output_file: "OpenCoder-LLM_opc-sft-stage1.jsonl"
+    input_files:
+      - "OpenCoder-LLM_opc-sft-stage1-filtered_infinity_instruct-train.jsonl"
+      - "OpenCoder-LLM_opc-sft-stage1-largescale_diverse_instruct-train.jsonl"
+      - "OpenCoder-LLM_opc-sft-stage1-realuser_instruct-train.jsonl"
+  
+  # OpenCoder Stage 2 合并
+  - name: "opc-sft-stage2"
+    output_file: "OpenCoder-LLM_opc-sft-stage2.jsonl"
+    input_files:
+      - "OpenCoder-LLM_opc-sft-stage2-educational_instruct-train.jsonl"
+      - "OpenCoder-LLM_opc-sft-stage2-evol_instruct-train.jsonl"
+      - "OpenCoder-LLM_opc-sft-stage2-mceval_instruct-train.jsonl"
+      - "OpenCoder-LLM_opc-sft-stage2-package_instruct-train.jsonl"
+  
+  # QA 数据集合并示例
+  - name: "qa-train-data"
+    output_file: "qa_train_data_chatml.jsonl"
+    input_files:
+      - "zh_qa_train_data_chatml.jsonl"
+      - "en_qa_train_data_chatml.jsonl"
+

@@ -1,0 +1,15 @@
+# SiliconFlow API Configuration
+# SiliconFlow 公共 API 服务
+
+client_config:
+  base_url: "https://api.siliconflow.cn/v1"
+  api_key: "sk-nrfkwelacfabbaikvxqflzztslbdrpmeduhzxqnzmisaulgy"
+  timeout: 600
+  max_retries: 3
+
+chat_config:
+  model: "deepseek-ai/DeepSeek-V3"  # 根据实际使用的模型调整
+  temperature: 0.7
+  max_tokens: 4000
+  stream: false
+

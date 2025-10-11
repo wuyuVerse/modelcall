@@ -1,0 +1,16 @@
+# DeepSeek V3 Local Configuration
+# 本地集群部署的 DeepSeek V3 模型
+
+client_config:
+  base_url: "http://generalsvc-dpsk-v3-gpu128-train.t-skyinfer-yzli02.svc.cluster.local:30000/v1"
+  # 备选地址: "http://deepseek-v3-train.t-skyinfer-fjing.svc.cluster.local/v1"
+  api_key: "EMPTY"
+  timeout: 600
+  max_retries: 3
+
+chat_config:
+  model: "deepseek-v3"
+  temperature: 0.7
+  max_tokens: 4000
+  stream: false
+

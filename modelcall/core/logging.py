@@ -71,7 +71,10 @@ class ModelCallLogger:
         self.task_name = task_name
         self.job_index = job_index
         self.world_size = world_size
-        self.log_dir = Path(log_dir)
+        
+        # 为每个任务创建独立的日志子目录
+        base_log_dir = Path(log_dir)
+        self.log_dir = base_log_dir / task_name
         self.log_level = getattr(logging, log_level.upper())
         
         # 创建日志目录

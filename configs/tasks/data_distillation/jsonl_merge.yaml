@@ -1,0 +1,40 @@
+# =============================================================================
+# JSONL文件合并任务配置 - 数据蒸馏第二步
+# =============================================================================
+
+task_name: "jsonl_merge"
+task_type: "data_distillation"  # 任务类型：数据蒸馏
+description: "将多个JSONL文件合并为单个文件"
+
+# 数据蒸馏配置
+distillation:
+  step: "jsonl_merge"  # 蒸馏步骤：JSONL合并
+  
+  # 合并配置文件路径
+  merge_config_path: "configs/distillation/merge_groups.yaml"
+  
+  # 输入输出目录
+  base_input_dir: "/volume/pt-train/users/wzhang/coder/coder-data/dataset/hf"
+  base_output_dir: "/volume/pt-train/users/wzhang/coder/coder-data/dataset/opc-sft"
+  
+  # 处理选项
+  chunk_size: 1000  # 分块写入大小
+  
+  # 要执行的合并组（留空则执行所有组）
+  merge_groups:
+    - "opc-sft-stage1"
+    - "opc-sft-stage2"
+  # merge_groups: []  # 空列表表示执行所有组
+
+# 日志配置
+logging:
+  level: "INFO"
+  batch_size: 100
+  progress_report_interval: 10
+
+# 调试配置
+debug:
+  enabled: false
+  max_files: -1
+  max_items_per_file: -1
+

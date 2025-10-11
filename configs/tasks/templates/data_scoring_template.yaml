@@ -1,0 +1,79 @@
+# =============================================================================
+# 数据评分任务配置模板
+# =============================================================================
+# 使用方法：
+# 1. 复制此模板到 configs/tasks/data_scoring/ 目录
+# 2. 重命名为你的任务名称，例如：my_scoring_task.yaml
+# 3. 修改下面的配置项
+# 4. 运行：python -m modelcall run-task configs/tasks/data_scoring/my_scoring_task.yaml
+
+task_name: "my_scoring_task"  # 修改：任务唯一标识
+task_type: "data_scoring"  # 固定：任务类型
+description: "任务描述说明"  # 修改：简短描述任务目的
+
+# 数据配置
+data:
+  input_folder: "./data/formatted/my-data"  # 修改：输入数据路径
+  output_folder: "./data/tagged/my-data/{timestamp}"  # 修改：输出路径（可使用{timestamp}）
+  stat_folder: "./data/stats/my-data"  # 修改：统计信息路径
+  input_key: "text"  # 修改：输入文本字段名
+  prompt_format_key: "text"  # 修改：提示词格式化字段名
+
+# 预处理配置（可选，如果不需要预处理可以删除此段）
+preprocess:
+  enabled: false  # 是否启用预处理
+  script_type: "universal"  # 预处理脚本类型
+  input_folder: "./data/raw/my-data"
+  output_folder: "./data/formatted/my-data"
+  max_tokens: 32768
+  num_proc: 16
+
+# 模型配置
+model:
+  config_path: "configs/models/qwen3-480b.yaml"  # 修改：选择模型配置
+
+# 提示词配置
+prompt:
+  config_path: "configs/prompts/repo_packaging_quality_rating_v1.0.yaml"  # 修改：选择提示词配置
+
+# 环境配置
+environment:
+  config_path: "env/add_qwen3_480b_external.env"  # 修改：API环境配置
+  tos_config_path: "env/add_tos_key.env"  # TOS配置（如果需要）
+  timeout: 600  # API超时时间（秒）
+
+# 并发配置
+concurrency:
+  max_concurrent_files: 1  # 修改：文件并发度
+  max_concurrent_requests: 32  # 修改：请求并发度
+  chunk_size: 50  # 修改：批次大小
+  parquet_save_interval: 200  # Parquet保存间隔
+
+# 分布式配置
+distributed:
+  enabled: false  # 是否启用分布式
+  world_size: 1  # 作业总数
+
+# 调试配置
+debug:
+  enabled: false  # 是否启用调试模式
+  max_files: -1  # 调试模式下处理的最大文件数
+  max_items_per_file: -1  # 调试模式下每个文件处理的最大项目数
+
+# 重试配置
+retry:
+  enable_format_validation_retry: true
+  max_retries: 3
+
+# 其他配置
+options:
+  preprocess_resume: true  # 预处理断点续传
+  main_resume: true  # 主处理断点续传
+  delete_existing: false  # 是否删除已有文件
+
+# 日志配置
+logging:
+  level: "INFO"  # 日志级别
+  batch_size: 50  # 批量日志大小
+  progress_report_interval: 5  # 进度报告间隔
+

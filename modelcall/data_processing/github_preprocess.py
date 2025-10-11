@@ -10,7 +10,7 @@ from typing import List, Tuple, Dict, Any
 import numpy as np
 
 from .base import BasePreprocessor, create_base_parser
-from ..utils import get_tos_config
+from ..common.utils import get_tos_config
 
 
 class GitHubPreprocessor(BasePreprocessor):

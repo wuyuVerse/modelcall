@@ -5,15 +5,15 @@ import os
 
 from dotenv import load_dotenv
 
-from .fs.base import FSConfig
-from .fs.local import LocalFileSystem
+from ..fs.base import FSConfig
+from ..fs.local import LocalFileSystem
 try:
-	from .fs.tos import TOSFileSystem
+	from ..fs.tos import TOSFileSystem
 except Exception:  # pragma: no cover
 	TOSFileSystem = None  # type: ignore
 
-from .pipeline.scorer import DummyScorer
-from .pipeline.runner import run_pipeline
+from ..data_scoring.scorer import DummyScorer
+from ..data_scoring.runner import run_pipeline
 
 
 def build_fs(backend: str, root: str | None) -> object:
@@ -37,8 +37,8 @@ def cmd_pipeline(args) -> None:
 
 def cmd_preprocess_github(args) -> None:
 	"""Run GitHub data preprocessing."""
-	from .data_processing.github_preprocess import GitHubPreprocessor
-	from .utils import get_tos_config
+	from ..data_processing.github_preprocess import GitHubPreprocessor
+	from ..common.utils import get_tos_config
 	
 	# Get TOS configuration
 	ak, sk, endpoint, region = get_tos_config()
@@ -58,8 +58,8 @@ def cmd_preprocess_github(args) -> None:
 def cmd_api_call(args) -> None:
 	"""Run concurrent API calling with two-level concurrency."""
 	import asyncio
-	from .pipeline.concurrent_processor import ConcurrentFileProcessor
-	from .utils import get_tos_config
+	from ..data_scoring.concurrent_processor import ConcurrentFileProcessor
+	from ..common.utils import get_tos_config
 	
 	# Get TOS configuration
 	ak, sk, endpoint, region = get_tos_config()
@@ -144,7 +144,7 @@ def cmd_preprocess_github(args) -> None:
 	]
 	
 	try:
-		from .data_processing.github_raw_code_preprocess import main as github_preprocess_main
+		from ..data_processing.preprocessors.github_raw_code import main as github_preprocess_main
 		github_preprocess_main()
 	finally:
 		# 恢复原始argv
@@ -177,7 +177,7 @@ def cmd_preprocess_repomix(args) -> None:
 		sys.argv.extend(["--languages"] + args.languages)
 	
 	try:
-		from .data_processing.repomix_xml_preprocess import main as repomix_preprocess_main
+		from ..data_processing.preprocessors.repo_xml import main as repomix_preprocess_main
 		repomix_preprocess_main()
 	finally:
 		# 恢复原始argv

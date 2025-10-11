@@ -13,9 +13,15 @@ from pathlib import Path
 import yaml
 from easydict import EasyDict
 from tenacity import retry, stop_after_attempt, wait_exponential
-from openai import AsyncOpenAI
 
-from ..utils import get_tos_config
+from ..common.model_client import UnifiedModelClient
+
+
+# 允许从配置覆盖的聊天参数（不包括 model 和 stream）
+ALLOWED_CHAT_PARAMS = {
+    'temperature', 'max_tokens', 'top_p', 
+    'frequency_penalty', 'presence_penalty', 'stop'
+}
 
 
 class APIScorer:
@@ -38,42 +44,83 @@ class APIScorer:
         self.model_config = self._load_config(model_config_path)
         self.prompt_config = self._load_config(prompt_config_path)
         
-        # Initialize API client
-        self.client = self._init_client()
+        # 提取模型名称（支持新旧两种格式）
+        if "chat_config" in self.model_config:
+            self.model_name = self.model_config.chat_config.get("model")
+            # 只允许特定的参数覆盖，避免冲突（如 stream）
+            self.chat_params = {
+                k: v for k, v in self.model_config.chat_config.items() 
+                if k in ALLOWED_CHAT_PARAMS
+            }
+        else:
+            # 向后兼容旧格式
+            self.model_name = self.model_config.get("model_name")
+            self.chat_params = self.model_config.get("completions_params", {})
         
-        # Request semaphore for rate limiting
-        self.request_semaphore = asyncio.Semaphore(max_concurrent_requests)
+        if not self.model_name:
+            raise ValueError("模型名称未找到。请在 model_config 中提供 chat_config.model 或 model_name")
+        
+        # Initialize API client (包含并发控制)
+        self.client = self._init_client()
     
     def _load_config(self, config_path: str) -> EasyDict:
         """Load YAML configuration file."""
         with open(config_path, 'r', encoding='utf-8') as f:
             return EasyDict(yaml.safe_load(f))
     
-    def _init_client(self) -> AsyncOpenAI:
-        """Initialize OpenAI-compatible API client."""
-        base_url = os.environ.get("BASE_URL", "https://api.openai.com/v1")
-        api_key = os.environ.get("API_KEY", "")
+    def _init_client(self) -> UnifiedModelClient:
+        """Initialize unified model client.
         
-        if not api_key:
-            raise ValueError("API_KEY environment variable not set.")
+        优先级：
+        1. model_config 中的统一配置格式（client_config + chat_config）
+        2. 环境变量 BASE_URL 和 API_KEY（向后兼容）
+        """
+        # 尝试使用统一配置格式
+        if "client_config" in self.model_config and "chat_config" in self.model_config:
+            config = {
+                "client_config": dict(self.model_config.client_config),
+                "chat_config": dict(self.model_config.chat_config)
+            }
+            
+            # 从 client_config 更新超时和重试配置
+            client_cfg = self.model_config.client_config
+            if "timeout" in client_cfg:
+                self.request_timeout = client_cfg.get("timeout", self.request_timeout)
+            if "max_retries" in client_cfg:
+                self.max_retries = client_cfg.get("max_retries", self.max_retries)
+            
+            return UnifiedModelClient(
+                config=config,
+                max_concurrent_requests=self.max_concurrent_requests,  # 由 UnifiedModelClient 统一控制并发
+                timeout=self.request_timeout,
+                max_retries=self.max_retries
+            )
         
-        return AsyncOpenAI(base_url=base_url, api_key=api_key)
+        # 回退到环境变量（向后兼容）
+        if os.environ.get("BASE_URL") or os.environ.get("API_KEY"):
+            return UnifiedModelClient(
+                use_env=True,
+                max_concurrent_requests=self.max_concurrent_requests,  # 由 UnifiedModelClient 统一控制并发
+                timeout=self.request_timeout,
+                max_retries=self.max_retries
+            )
+        
+        raise ValueError(
+            "API配置未找到。请在 model_config 中提供统一格式配置"
+            "（client_config + chat_config），或设置环境变量 BASE_URL 和 API_KEY"
+        )
     
     async def _get_chat_completion_raw(self, message: List[Dict[str, str]]) -> str:
-        """Get raw completion from API without retry logic."""
-        async with self.request_semaphore:
-            response = await self.client.chat.completions.create(
-                model=self.model_config.model_name,
-                messages=message,
-                timeout=self.request_timeout,
-                **self.model_config.get("completions_params", {})
-            )
-            
-            response_result = response.choices[0].message.content
-            if response_result == "" and response.choices[0].message.reasoning_content:
-                response_result = response.choices[0].message.reasoning_content
-            
-            return response_result
+        """Get raw completion from API without retry logic.
+        
+        并发控制由 UnifiedModelClient 内部管理。
+        """
+        # 直接调用统一客户端（内部已有并发控制）
+        response = await self.client._chat_completion_raw(
+            messages=message,
+            **self.chat_params
+        )
+        return response
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=5, min=4, max=60))
     async def _get_valid_completion(self, message: List[Dict[str, str]], validate_json: bool = False) -> str:
@@ -194,7 +241,8 @@ class APIScorer:
             
             # Get API response with validation and retry
             require_json = self.prompt_config.output_config.get("require_json", False)
-            response = await self._get_valid_completion(message, validate_json=require_json)
+            response = await self.
+            (message, validate_json=require_json)
             
             # Parse response (should succeed since we validated in _get_valid_completion)
             if require_json:

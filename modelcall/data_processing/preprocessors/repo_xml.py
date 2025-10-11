@@ -16,8 +16,8 @@ import numpy as np
 import re
 from datetime import datetime
 
-from ..common.utils import get_tos_config, get_filesystem, process_text, save_progress_stat
-from .base import BasePreprocessor
+from ...common.utils import get_tos_config, get_filesystem, process_text, save_progress_stat
+from ..base import BasePreprocessor
 
 
 DEFAULT_FILE_STAT = {

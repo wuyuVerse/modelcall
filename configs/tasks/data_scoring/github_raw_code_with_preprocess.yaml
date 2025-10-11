@@ -3,6 +3,7 @@
 # =============================================================================
 
 task_name: "github_raw_code_with_preprocess"
+task_type: "data_scoring"  # 任务类型：数据评分
 description: "GitHub原始代码数据预处理并评分"
 
 # 数据配置 - 这将被预处理输出覆盖
