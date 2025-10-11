@@ -1,0 +1,20 @@
+# Qwen3-Coder-480B-A35B-Instruct Model Configuration (wzhang deployment)
+# 超大规模代码专用模型，用于数据蒸馏的响应生成
+
+client_config:
+  base_url: "http://qwen3code480-0.t-skyinfer-wzhang.svc.cluster.local/v1"
+  api_key: "EMPTY"
+  timeout: 600
+  max_retries: 3
+
+chat_config:
+  model: "Qwen3-Coder-480B-A35B-Instruct"
+  temperature: 0.7
+  max_tokens: 8000
+  stream: false
+
+# 模型特性说明
+# - 参数量: 480B 超大规模
+# - 专长: 代码理解、逻辑推理、多语言编程
+# - 适用场景: 数据蒸馏、代码响应生成
+

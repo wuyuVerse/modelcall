@@ -1,0 +1,69 @@
+# =============================================================================
+# OpenCoder Stage2 批量蒸馏任务提交配置
+# =============================================================================
+
+task_name: "batch_submit_opc_stage2"
+task_type: "batch_distillation_submit"  # 任务类型：批量蒸馏提交
+description: "为 OpenCoder Stage2 数据创建批量蒸馏任务"
+
+# 数据切分配置
+data_split:
+  input_file: "/volume/pt-train/users/wzhang/coder/coder-data/dataset/opc-sft/OpenCoder-LLM_opc-sft-stage2.jsonl"
+  num_chunks: 2  # 切分成1000份
+  output_dir: "/volume/pt-train/users/wzhang/coder/coder-data/dataset/opc-sft/OpenCoder-LLM_opc-sft-stage2_test"  # 自动生成
+
+# 批量提交配置
+batch_submit:
+  # 输出基础目录
+  output_base_dir: "/volume/pt-train/users/wzhang/coder/coder-data/dataset/opc-sft/distillation_output_test"
+  
+  # 任务名称前缀
+  name_prefix: "opc2"
+  
+  # 蒸馏参数
+  concurrency: 30  # 每个任务的并发数
+  batch_size: 30   # 批量保存大小
+  
+  # SiFlow 资源配置
+  siflow:
+    count_per_pod: 10  # 每个 pod 的 CPU 核心数
+    resource_pool: "eval-cpu"  # 资源池名称
+    priority: "medium"  # 任务优先级: low, medium, high
+    guarantee: true  # 是否保证资源
+    region: "cn-beijing"  # SiFlow 区域
+    cluster: "auriga"  # SiFlow 集群
+  
+  # 模型配置列表
+  models:
+    - config_path: "/volume/pt-train/users/wzhang/wjj-workspace/modelcall/configs/models/claude-sonnet-4.5-thinking.yaml"
+      alias: "think"  # 任务别名后缀
+      
+    - config_path: "/volume/pt-train/users/wzhang/wjj-workspace/modelcall/configs/models/claude-sonnet-4.5.yaml"
+      alias: "std"  # 任务别名后缀
+
+# 执行选项
+execution:
+  dry_run: false  # 是否只生成命令不提交
+  auto_split: true  # 是否自动执行文件切分
+  
+# 环境配置
+environment:
+  conda_env: "/volume/pt-train/users/wzhang/miniconda3/envs/wzhang_base"
+  project_root: "/volume/pt-train/users/wzhang/wjj-workspace/modelcall"
+  env_file: "env/add_siflow.env"  # SiFlow 环境变量文件
+
+# 后处理配置
+post_processing:
+  auto_merge: false  # 是否自动合并结果（任务提交后立即合并，通常设为 false，等任务完成后手动合并）
+  merge_errors: true  # 是否合并错误文件
+  
+  # 说明：要合并结果，有两种方式：
+  # 1. 设置 auto_merge: true（不推荐，因为任务可能还在运行）
+  # 2. 任务完成后，使用专门的合并配置运行
+
+# 日志配置
+logging:
+  level: "INFO"
+  log_dir: "/volume/pt-train/users/wzhang/wjj-workspace/modelcall/logs"  # 日志目录
+  show_progress: true
+

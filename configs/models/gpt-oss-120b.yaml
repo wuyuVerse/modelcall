@@ -1,0 +1,19 @@
+# GPT-OSS-120B Model Configuration
+# 用于数据蒸馏的响应生成
+
+client_config:
+  base_url: "http://gptoss-1.t-skyinfer-wzhang.svc.cluster.local/v1"
+  api_key: "EMPTY"
+  timeout: 600
+  max_retries: 3
+
+chat_config:
+  model: "gpt-oss-120b"
+  temperature: 0.7
+  max_tokens: 8000
+  stream: false
+
+# 模型特性说明
+# - 参数量: 120B
+# - 适用场景: 数据蒸馏、响应生成
+

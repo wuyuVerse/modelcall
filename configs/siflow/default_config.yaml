@@ -1,0 +1,21 @@
+# SiFlow 默认配置
+
+# SiFlow 连接配置
+connection:
+  region: "cn-beijing"
+  cluster: "auriga"
+  access_key_id: "2090ea85-2562-4fc0-8ce7-6778aaeb79e9"
+  access_key_secret: "SLhaTGwtD1vPt5SzTS"
+
+# 默认资源配置
+resources:
+  count_per_pod: 10  # 每个 pod 的 CPU 核心数
+  resource_pool: "eval-cpu"  # 资源池名称
+  guarantee: false  # 是否保证资源
+  priority: "medium"  # 任务优先级: low, medium, high
+
+# 默认蒸馏配置
+distillation:
+  concurrency: 30  # 并发数
+  batch_size: 30  # 批量保存大小
+

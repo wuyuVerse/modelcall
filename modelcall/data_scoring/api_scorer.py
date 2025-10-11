@@ -241,8 +241,7 @@ class APIScorer:
             
             # Get API response with validation and retry
             require_json = self.prompt_config.output_config.get("require_json", False)
-            response = await self.
-            (message, validate_json=require_json)
+            response = await self._get_valid_completion(message, validate_json=require_json)
             
             # Parse response (should succeed since we validated in _get_valid_completion)
             if require_json:

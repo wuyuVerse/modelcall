@@ -1,0 +1,27 @@
+# SiFlow 任务配置模板
+# 用于数据蒸馏任务的批量提交
+
+namePrefix: {name_prefix}
+volumes:
+  - volumeId: 5
+    mountDir: /volume/pt-data
+  - volumeId: 9
+    mountDir: /volume/pt-train
+enhancements:
+  faultTolerance:
+    enabled: true
+    maxRetryCount: 0
+type: pytorchjob
+image: verl
+imageVersion: "wzhang-dev"
+imageUrl: registry-cn-beijing.siflow.cn/skyinfer/verl:wzhang-dev-ssh
+guarantee: {guarantee}
+priority: {priority}
+resourcePool: {resource_pool}
+workers: 0
+instances:
+  - name: sci.c23-2
+    countPerPod: {count_per_pod}
+cmd: |
+{cmd}
+

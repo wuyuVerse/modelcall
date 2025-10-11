@@ -4,7 +4,7 @@ client_config:
   base_url: "https://api.vectortara.com/v1"
   api_key: "sk-rxxCtIlp0rB2inE_MaMNwnIh84oqQknQE2rfQ1MKVEWWL78mbPZstWgfUjI"
   timeout: 600
-  max_retries: 3
+  max_retries: 50
 
 chat_config:
   model: "claude-sonnet-4-5-20250929"

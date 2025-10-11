@@ -1,0 +1,43 @@
+# =============================================================================
+# 响应生成任务配置 - GPT-OSS-120B
+# =============================================================================
+
+task_name: "generate_response_gpt_oss_20251011"
+task_type: "data_distillation"  # 任务类型：数据蒸馏
+description: "使用GPT-OSS-120B为知识数据生成响应"
+
+# 数据蒸馏配置
+distillation:
+  step: "generate_response"  # 蒸馏步骤：响应生成
+  
+  # 响应生成配置文件路径 - 引用GPT-OSS模型配置
+  response_config_path: "configs/models/gpt-oss-120b.yaml"
+  
+  # 输入输出路径
+  input_path: "/volume/pt-train/users/wzhang/coder/coder-data/code-sft/knowledge/raw_datasets/keep_2025-08-08-04-38-35.jsonl"
+  output_path: "/volume/pt-train/users/wzhang/coder/coder-data/code-sft/knowledge/generate_response_output/gpt_oss_20251011/"
+  
+  # 处理选项
+  concurrency: 2048  # 并发数量
+  batch_size: 1000  # 批量保存大小
+  flush_interval_secs: 5.0  # 定时刷新间隔（秒）
+  retry_mode: false  # 是否为重试模式（重新处理失败的任务）
+  resume_mode: true  # 是否启用断点续传（跳过已完成的任务）
+
+# 分布式配置
+distributed:
+  enabled: false
+  world_size: 1
+
+# 日志配置
+logging:
+  level: "INFO"
+  batch_size: 100
+  progress_report_interval: 10
+
+# 调试配置
+debug:
+  enabled: false
+  max_files: -1
+  max_items_per_file: -1
+

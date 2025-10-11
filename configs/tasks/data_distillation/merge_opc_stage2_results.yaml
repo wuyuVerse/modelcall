@@ -1,0 +1,27 @@
+# =============================================================================
+# OpenCoder Stage2 结果合并配置
+# =============================================================================
+
+task_name: "merge_opc_stage2_results"
+task_type: "merge_distillation_results"  # 任务类型：合并蒸馏结果
+description: "合并 OpenCoder Stage2 批量蒸馏任务的输出结果"
+
+# 合并配置
+merge:
+  # 输出基础目录（与批量提交配置中的 output_base_dir 一致）
+  output_base_dir: "/volume/pt-train/users/wzhang/coder/coder-data/dataset/opc-sft/distillation_output"
+  
+  # 是否合并错误文件
+  merge_errors: true
+  
+  # 要合并的模型列表（与批量提交配置中的 models 对应）
+  models:
+    - name: "claude-sonnet-4.5-thinking"  # 模型名称（对应子目录名）
+    - name: "claude-sonnet-4.5"
+
+# 日志配置
+logging:
+  level: "INFO"
+  log_dir: "/volume/pt-train/users/wzhang/wjj-workspace/modelcall/logs"  # 日志输出目录
+  show_progress: true
+

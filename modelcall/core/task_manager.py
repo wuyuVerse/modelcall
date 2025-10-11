@@ -302,11 +302,22 @@ class TaskManager:
         # 数据蒸馏任务的配置摘要
         if task_type == "data_distillation":
             distillation_config = self.config.get("distillation", {})
-            print(f"   蒸馏步骤: {distillation_config.get('step', 'unknown')}")
-            print(f"   输入目录: {distillation_config.get('input_dir', 'N/A')}")
-            print(f"   输出目录: {distillation_config.get('output_dir', 'N/A')}")
-            print(f"   并行进程数: {distillation_config.get('num_processes', 'N/A')}")
-            print(f"   断点续传: {'启用' if distillation_config.get('continue_mode', True) else '禁用'}")
+            step = distillation_config.get('step', 'unknown')
+            print(f"   蒸馏步骤: {step}")
+            
+            # 根据不同的步骤显示不同的配置
+            if step == "generate_response":
+                print(f"   输入路径: {distillation_config.get('input_path', 'N/A')}")
+                print(f"   输出路径: {distillation_config.get('output_path', 'N/A')}")
+                print(f"   模型配置: {distillation_config.get('response_config_path', 'N/A')}")
+                print(f"   并发数: {distillation_config.get('concurrency', 'N/A')}")
+                print(f"   批量大小: {distillation_config.get('batch_size', 'N/A')}")
+                print(f"   断点续传: {'启用' if distillation_config.get('resume_mode', True) else '禁用'}")
+            else:
+                print(f"   输入目录: {distillation_config.get('input_dir', 'N/A')}")
+                print(f"   输出目录: {distillation_config.get('output_dir', 'N/A')}")
+                print(f"   并行进程数: {distillation_config.get('num_processes', 'N/A')}")
+                print(f"   断点续传: {'启用' if distillation_config.get('continue_mode', True) else '禁用'}")
             return
         
         # 数据评分任务的配置摘要

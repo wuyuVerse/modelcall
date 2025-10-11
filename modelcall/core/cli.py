@@ -107,9 +107,50 @@ def cmd_api_call(args) -> None:
 def cmd_run_task(args) -> None:
 	"""Run task using task configuration file."""
 	import asyncio
+	import yaml
+	from pathlib import Path
 	from .task_manager import TaskManager
+	from .logging import setup_logging, cleanup_logging
+	from ..data_distillation.batch_submit_runner import BatchSubmitRunner
 	
-	# Load task manager
+	# 加载配置文件
+	config_path = Path(args.task_config)
+	with open(config_path, 'r', encoding='utf-8') as f:
+		config = yaml.safe_load(f)
+	
+	task_type = config.get('task_type')
+	task_name = config.get('task_name', 'unknown_task')
+	
+	# 设置日志
+	logging_config = config.get('logging', {})
+	log_level = logging_config.get('level', 'INFO')
+	log_dir = logging_config.get('log_dir', 'logs')
+	
+	setup_logging(
+		task_name=task_name,
+		job_index=0,
+		world_size=1,
+		log_dir=log_dir,
+		log_level=log_level
+	)
+	
+	try:
+		# 如果是批量提交任务，使用专门的执行器
+		if task_type == "batch_distillation_submit":
+			runner = BatchSubmitRunner(config)
+			runner.run()
+			return
+		
+		# 如果是合并结果任务，使用专门的执行器
+		if task_type == "merge_distillation_results":
+			from ..data_distillation.merge_results_runner import MergeResultsRunner
+			runner = MergeResultsRunner(config)
+			runner.run()
+			return
+	finally:
+		cleanup_logging()
+	
+	# 其他任务类型使用 TaskManager
 	task_manager = TaskManager(args.task_config)
 	
 	# Print configuration summary
@@ -120,6 +161,88 @@ def cmd_run_task(args) -> None:
 		job_index=args.job_index,
 		world_size=args.world_size
 	))
+
+
+def cmd_distillation_generate(args) -> None:
+	"""Run response generation task."""
+	import asyncio
+	import json
+	import yaml
+	from pathlib import Path
+	from ..data_distillation import ResponseGenerator
+	from .logging import setup_logging, cleanup_logging, get_logger
+	
+	# 生成任务名称
+	input_file_name = Path(args.input_path).stem
+	task_name = f"response_gen_{input_file_name}"
+	
+	# 设置日志
+	setup_logging(
+		task_name=task_name,
+		job_index=0,
+		world_size=1,
+		log_dir=args.log_dir,
+		log_level=args.log_level
+	)
+	
+	logger = get_logger()
+	
+	try:
+		# 加载模型配置
+		logger.info(f"加载模型配置: {args.model_config}")
+		config_path = Path(args.model_config)
+		
+		if not config_path.exists():
+			raise FileNotFoundError(f"模型配置文件不存在: {config_path}")
+		
+		with open(config_path, 'r', encoding='utf-8') as f:
+			if config_path.suffix in ['.yaml', '.yml']:
+				model_config = yaml.safe_load(f)
+			elif config_path.suffix == '.json':
+				model_config = json.load(f)
+			else:
+				raise ValueError(f"不支持的配置文件格式: {config_path.suffix}")
+		
+		if "client_config" not in model_config or "chat_config" not in model_config:
+			raise ValueError("模型配置文件必须包含 client_config 和 chat_config")
+		
+		client_config = model_config["client_config"]
+		chat_config = model_config["chat_config"]
+		
+		logger.info(f"模型: {chat_config.get('model', 'unknown')}")
+		logger.info(f"输入文件: {args.input_path}")
+		logger.info(f"输出目录: {args.output_path}")
+		logger.info(f"并发数: {args.concurrency}")
+		logger.info(f"批量大小: {args.batch_size}")
+		logger.info(f"重试模式: {args.retry}")
+		logger.info(f"断点续传: {not args.no_resume}")
+		
+		# 创建响应生成器
+		generator = ResponseGenerator(
+			input_path=args.input_path,
+			output_path=args.output_path,
+			client_config=client_config,
+			chat_config=chat_config,
+			concurrency=args.concurrency,
+			batch_size=args.batch_size,
+			flush_interval_secs=args.flush_interval,
+			retry_mode=args.retry,
+			resume_mode=not args.no_resume
+		)
+		
+		# 运行生成
+		asyncio.run(generator.run())
+		
+		logger.info("响应生成任务完成!")
+		
+	except Exception as e:
+		logger.error(f"任务执行失败: {e}", exc_info=True)
+		raise
+	
+	finally:
+		cleanup_logging()
+
+
 
 
 def cmd_preprocess_github(args) -> None:
@@ -253,6 +376,20 @@ def main() -> None:
 	task_parser.add_argument("--job_index", type=int, default=0, help="Job index for distributed processing")
 	task_parser.add_argument("--world_size", type=int, default=None, help="Override world size from config")
 	task_parser.set_defaults(func=cmd_run_task)
+	
+	# Distillation generate command (single response generation task)
+	distillation_parser = subparsers.add_parser("distillation-generate", help="Run single response generation task")
+	distillation_parser.add_argument("--input-path", "-i", required=True, help="输入 JSONL 文件路径")
+	distillation_parser.add_argument("--output-path", "-o", required=True, help="输出目录路径")
+	distillation_parser.add_argument("--model-config", "-m", required=True, help="模型配置文件路径")
+	distillation_parser.add_argument("--concurrency", "-c", type=int, default=30, help="并发数")
+	distillation_parser.add_argument("--batch-size", "-b", type=int, default=30, help="批量保存大小")
+	distillation_parser.add_argument("--flush-interval", "-f", type=float, default=2.0, help="刷新间隔（秒）")
+	distillation_parser.add_argument("--retry", action="store_true", help="重试模式")
+	distillation_parser.add_argument("--no-resume", action="store_true", help="禁用断点续传")
+	distillation_parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+	distillation_parser.add_argument("--log-dir", default="/volume/pt-train/users/wzhang/wjj-workspace/modelcall/logs", help="日志目录")
+	distillation_parser.set_defaults(func=cmd_distillation_generate)
 	
 	args = parser.parse_args()
 	
