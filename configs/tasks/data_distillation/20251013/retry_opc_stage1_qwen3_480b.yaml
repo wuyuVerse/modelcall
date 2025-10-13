@@ -1,0 +1,35 @@
+task_name: "retry_opc_stage1_qwen3_480b"
+task_type: "generate_response"
+description: "重新处理 OPC Stage1 Qwen3-Coder-480B 错误数据"
+
+# 数据蒸馏配置
+distillation:
+  step: "generate_response"
+  
+  # 输入输出路径
+  input_path: "/volume/pt-train/users/wzhang/coder/coder-data/dataset/opc-sft/generated/stage1_qwen3_480b/OpenCoder-LLM_opc-sft-stage1_error.jsonl"
+  output_path: "/volume/pt-train/users/wzhang/coder/coder-data/dataset/opc-sft/generated/retry_20251013_qwen3"
+  
+  # 模型配置
+  model_config: "/volume/pt-train/users/wzhang/wjj-workspace/modelcall/configs/models/qwen3-coder-480b-wzhang.yaml"
+  
+  # 并发和批处理设置
+  concurrency: 1024
+  batch_size: 10
+  flush_interval: 2.0
+  
+  # 执行选项
+  retry_mode: false  # 不使用 retry 模式，直接处理
+  resume: true       # 启用断点续传
+
+# 分布式配置
+distributed:
+  enabled: false
+  world_size: 1
+
+# 日志配置
+logging:
+  level: "INFO"
+  log_dir: "/volume/pt-train/users/wzhang/wjj-workspace/modelcall/logs"
+  show_progress: true
+
