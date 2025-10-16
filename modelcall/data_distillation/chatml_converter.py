@@ -24,7 +24,8 @@ class ChatMLConverter:
         keep_raw_data: bool = True,
         add_system_prompt: bool = False,
         system_prompt: str = "You are a helpful assistant and an expert coder.",
-        continue_mode: bool = True
+        continue_mode: bool = True,
+        selected_datasets: Optional[List[str]] = None
     ):
         """
         初始化ChatML转换器
@@ -47,6 +48,7 @@ class ChatMLConverter:
         self.add_system_prompt = add_system_prompt
         self.system_prompt = system_prompt
         self.continue_mode = continue_mode
+        self.selected_datasets = set(selected_datasets) if selected_datasets else None
         
         # 创建输出目录
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -144,6 +146,15 @@ class ChatMLConverter:
         messages = input_messages + [{"role": "assistant", "content": output}]
         return ChatMLConverter.create_chatml_structure(messages, original_sample=sample, **kwargs)
     
+    @staticmethod
+    def format_prompt_text_only(sample: Dict, mapping: Dict, **kwargs) -> Optional[Dict]:
+        """格式化只有 prompt_text 字段的格式（如 oo1.jsonl）"""
+        prompt_text = sample.get(mapping["prompt_text"])
+        if not prompt_text:
+            return None
+        messages = [{"role": "user", "content": prompt_text}]
+        return ChatMLConverter.create_chatml_structure(messages, original_sample=sample, **kwargs)
+    
     def _get_formatters(self) -> Dict:
         """获取格式化函数映射"""
         return {
@@ -152,6 +163,7 @@ class ChatMLConverter:
             "sharegpt": self.format_sharegpt,
             "messages": self.format_messages,
             "input_output_messages": self.format_input_output_messages,
+            "prompt_text_only": self.format_prompt_text_only,
         }
     
     # ==================================================================================================
@@ -169,14 +181,46 @@ class ChatMLConverter:
             formatter = formatters[config_details["format_style"]]
             
             dataset_path = Path(input_dir) / dataset_key
-            dataset = load_dataset(str(dataset_path), name=config_name, split=split, trust_remote_code=True)
+            # 兼容 input_dir 直接指向数据集叶子目录的情况：
+            # 例如 input_dir = "/.../nvidia/Nemotron-Post-Training-Dataset-v2",
+            # 而 dataset_key = "nvidia/Nemotron-Post-Training-Dataset-v2"
+            if not dataset_path.exists():
+                leaf_dir = Path(input_dir)
+                if leaf_dir.exists() and leaf_dir.name == Path(dataset_key).name:
+                    dataset_path = leaf_dir
             
-            config_str = f"-{config_name}" if config_name else ""
-            file_name_key = dataset_key.replace("/", "_")
-            if self.add_system_prompt:
-                output_file_path = Path(output_dir) / f"{file_name_key}{config_str}-{split}-with_system.jsonl"
+            # 判断是否为纯 JSONL 文件（通过检查路径是否为文件）
+            is_jsonl_file = dataset_path.is_file() and dataset_path.suffix == '.jsonl'
+            
+            if is_jsonl_file:
+                # 纯 JSONL 文件：使用 'json' 格式加载
+                dataset = load_dataset('json', data_files=str(dataset_path), split='train')
             else:
-                output_file_path = Path(output_dir) / f"{file_name_key}{config_str}-{split}.jsonl"
+                # HuggingFace datasets 目录格式
+                # 本地目录存在：不传 trust_remote_code；远端数据集：需要 trust_remote_code
+                if dataset_path.exists():
+                    dataset = load_dataset(str(dataset_path), name=config_name, split=split)
+                else:
+                    dataset = load_dataset(dataset_key, name=config_name, split=split, trust_remote_code=True)
+            
+            # 输出目录：按数据集名分子目录（例如 prepared/Nemotron-Post-Training-Dataset-v2）
+            dataset_dir_name = Path(dataset_key).name
+            if is_jsonl_file and dataset_dir_name.endswith('.jsonl'):
+                dataset_dir_name = dataset_dir_name[:-6]
+            dataset_output_dir = Path(output_dir) / dataset_dir_name
+            dataset_output_dir.mkdir(parents=True, exist_ok=True)
+
+            # 文件名键：与 run() 中的 continue 判断保持一致（JSONL 去除扩展名）
+            config_str = f"-{config_name}" if config_name else ""
+            if is_jsonl_file:
+                file_name_key = dataset_key.replace("/", "_").replace(".jsonl", "")
+            else:
+                file_name_key = dataset_key.replace("/", "_")
+
+            if self.add_system_prompt:
+                output_file_path = dataset_output_dir / f"{file_name_key}{config_str}-{split}-with_system.jsonl"
+            else:
+                output_file_path = dataset_output_dir / f"{file_name_key}{config_str}-{split}.jsonl"
             
             formatter_kwargs = {
                 "keep_raw_data": self.keep_raw_data,
@@ -200,42 +244,95 @@ class ChatMLConverter:
         tasks_to_run = []
         skipped_count = 0
         
-        for dataset_key, config_details in self.dataset_config.items():
+        # 如果指定了 selected_datasets，则只处理这些数据集
+        if self.selected_datasets is not None:
+            dataset_items = [(k, v) for k, v in self.dataset_config.items() if k in self.selected_datasets]
+            missing = [k for k in self.selected_datasets if k not in self.dataset_config]
+            if missing:
+                self.logger.warning(f"Selected datasets not found in config and will be ignored: {missing}")
+            self.logger.info(f"Limiting processing to {len(dataset_items)} selected dataset(s)")
+        else:
+            dataset_items = list(self.dataset_config.items())
+
+        for dataset_key, config_details in dataset_items:
             dataset_path = self.input_dir / dataset_key
             if not dataset_path.exists():
-                self.logger.warning(f"Dataset path not found, skipping: {dataset_path}")
-                continue
+                # 兼容 input_dir 直接指向数据集叶子目录的情况
+                leaf_dir = self.input_dir
+                if leaf_dir.exists() and leaf_dir.name == Path(dataset_key).name:
+                    dataset_path = leaf_dir
+                else:
+                    self.logger.warning(f"Dataset path not found, skipping: {dataset_path}")
+                    continue
 
-            configs_to_process = config_details.get("configs", [None])
-            for config_name in configs_to_process:
-                try:
-                    split_names = get_dataset_split_names(str(dataset_path), config_name=config_name, trust_remote_code=True)
-                    for split in split_names:
-                        # 检查文件是否存在于 continue_mode
-                        config_str = f"-{config_name}" if config_name else ""
-                        file_name_key = dataset_key.replace("/", "_")
-                        if self.add_system_prompt:
-                            output_file_path = self.output_dir / f"{file_name_key}{config_str}-{split}-with_system.jsonl"    
+            # 判断是否为纯 JSONL 文件
+            is_jsonl_file = dataset_path.is_file() and dataset_path.suffix == '.jsonl'
+            
+            if is_jsonl_file:
+                # 纯 JSONL 文件：只有一个 "train" split
+                file_name_key = dataset_key.replace("/", "_").replace(".jsonl", "")
+                dataset_dir_name = Path(dataset_key).name
+                if dataset_dir_name.endswith('.jsonl'):
+                    dataset_dir_name = dataset_dir_name[:-6]
+                per_dataset_dir = self.output_dir / dataset_dir_name
+                per_dataset_dir.mkdir(parents=True, exist_ok=True)
+                if self.add_system_prompt:
+                    output_file_path = per_dataset_dir / f"{file_name_key}-train-with_system.jsonl"
+                else:
+                    output_file_path = per_dataset_dir / f"{file_name_key}-train.jsonl"
+                
+                if self.continue_mode and output_file_path.exists():
+                    self.logger.info(f"Skipping task for '{output_file_path.name}' as it already exists.")
+                    skipped_count += 1
+                else:
+                    tasks_to_run.append((dataset_key, None, 'train', str(self.input_dir), str(self.output_dir)))
+            else:
+                # HuggingFace datasets 目录格式
+                configs_to_process = config_details.get("configs", [None])
+                for config_name in configs_to_process:
+                    try:
+                        # 本地目录存在：不传 trust_remote_code；远端数据集：需要 trust_remote_code
+                        if dataset_path.exists():
+                            try:
+                                split_names = get_dataset_split_names(str(dataset_path), config_name=config_name)
+                            except Exception:
+                                split_names = ["train"]
                         else:
-                            output_file_path = self.output_dir / f"{file_name_key}{config_str}-{split}.jsonl"
+                            try:
+                                split_names = get_dataset_split_names(dataset_key, config_name=config_name, trust_remote_code=True)
+                            except Exception:
+                                split_names = ["train"]
+                        for split in split_names:
+                            # 检查文件是否存在于 continue_mode
+                            config_str = f"-{config_name}" if config_name else ""
+                            file_name_key = dataset_key.replace("/", "_")
+                            dataset_dir_name = Path(dataset_key).name
+                            per_dataset_dir = self.output_dir / dataset_dir_name
+                            per_dataset_dir.mkdir(parents=True, exist_ok=True)
+                            if self.add_system_prompt:
+                                output_file_path = per_dataset_dir / f"{file_name_key}{config_str}-{split}-with_system.jsonl"    
+                            else:
+                                output_file_path = per_dataset_dir / f"{file_name_key}{config_str}-{split}.jsonl"
 
-                        if self.continue_mode and output_file_path.exists():
-                            self.logger.info(f"Skipping task for '{output_file_path.name}' as it already exists.")
-                            skipped_count += 1
-                            continue  # 跳过此任务
-                        
-                        tasks_to_run.append((dataset_key, config_name, split, str(self.input_dir), str(self.output_dir)))
-                except Exception as e:
-                    self.logger.error(f"Could not get splits for {dataset_key} (config: {config_name}). Error: {e}")
+                            if self.continue_mode and output_file_path.exists():
+                                self.logger.info(f"Skipping task for '{output_file_path.name}' as it already exists.")
+                                skipped_count += 1
+                                continue  # 跳过此任务
+                            
+                            tasks_to_run.append((dataset_key, config_name, split, str(self.input_dir), str(self.output_dir)))
+                    except Exception as e:
+                        self.logger.error(f"Could not get splits for {dataset_key} (config: {config_name}). Error: {e}")
 
         if skipped_count > 0:
             self.logger.info(f"Skipped {skipped_count} tasks that were already completed (continue_mode).")
 
         if not tasks_to_run:
             self.logger.info("No new tasks to run. All configured datasets are either processed or not found.")
+            self.logger.info(f"DEBUG: Total datasets in config: {len(self.dataset_config)}")
             return
             
         self.logger.info(f"Found {len(tasks_to_run)} new tasks to process.")
+        self.logger.info(f"DEBUG: First 3 tasks: {tasks_to_run[:3]}")
         
         worker_func = partial(self.process_single_task)
 

@@ -69,15 +69,6 @@ nvidia/OpenMathReasoning:
     prompt: "problem"
     response: "generated_solution"
 
-nvidia/Llama-Nemotron-Post-Training-Dataset:
-  configs:
-    - "SFT"
-    - "RL"
-  format_style: "input_output_messages"
-  column_mapping:
-    input: "input"
-    output: "output"
-
 nvidia/Aegis-AI-Content-Safety-Dataset-2.0:
   configs:
     - null
@@ -123,3 +114,32 @@ finbarr/tulu-3-sft-personas-code-o3:
   column_mapping:
     messages: "messages"
 
+# =============================================================================
+# 2025-10-15 新增数据集
+# =============================================================================
+
+# oo1.jsonl - 纯 JSONL 文件（只有 prompt_text 字段）
+# 使用方法：将 oo1.jsonl 放在 input_dir 下，配置中使用 "oo1.jsonl" 作为 key
+oo1.jsonl:
+  configs:
+    - null
+  format_style: "prompt_text_only"
+  column_mapping:
+    prompt_text: "prompt_text"
+
+nvidia/Nemotron-Post-Training-Dataset-v2:
+  configs:
+    - null  # 不指定 config，直接使用 split 名称
+  format_style: "messages"
+  column_mapping:
+    messages: "messages"
+
+
+nvidia/Llama-Nemotron-Post-Training-Dataset:
+  configs:
+    - "SFT"
+    - "RL"
+  format_style: "input_output_messages"
+  column_mapping:
+    input: "input"
+    output: "output"

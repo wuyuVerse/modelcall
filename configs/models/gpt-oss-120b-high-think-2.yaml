@@ -1,0 +1,23 @@
+# GPT-OSS-120B Model Configuration (High Think)
+# 为数据蒸馏打开 reasoning 高强度（high think）
+
+client_config:
+  base_url: "http://oss-2-0.t-skyinfer-wzhang.svc.cluster.local/v1"
+  api_key: "EMPTY"
+  timeout: 600
+  max_retries: 3
+
+chat_config:
+  model: "gpt-oss-120b"
+  temperature: 0.7
+  max_tokens: 8000
+  stream: false
+  # 开启高强度推理（GPT-OSS 使用 reasoning_effort 顶层参数）
+  reasoning_effort: high
+
+# 说明
+# - 该配置基于 Chat Completions API 使用 reasoning.effort=high
+# - 现有 UnifiedModelClient 会将 chat_config 透传给 chat.completions.create
+# - 若服务端返回 reasoning_content，客户端会自动以 <think>...</think> 拼接到最终文本
+
+

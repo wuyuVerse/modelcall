@@ -1,0 +1,36 @@
+# =============================================================================
+# 响应生成任务配置 - GPT-OSS-120B (High Think) - OPC Stage2
+# =============================================================================
+
+task_name: "generate_response_gpt_oss_high_think_opc_stage2_20251014"
+task_type: "data_distillation"
+description: "使用 GPT-OSS-120B（High Think）为 OPC Stage2 生成响应"
+
+distillation:
+  step: "generate_response"
+  response_config_path: "configs/models/gpt-oss-120b-high-think.yaml"
+
+  input_path: "/volume/pt-train/users/wzhang/coder/coder-data/dataset/opc-sft/OpenCoder-LLM_opc-sft-stage2.jsonl"
+  output_path: "/volume/pt-train/users/wzhang/coder/coder-data/dataset/opc-sft/generated/gpt_oss_high_think_20251014/opc-stage2/"
+
+  concurrency: 512
+  batch_size: 100
+  flush_interval_secs: 5.0
+  retry_mode: false
+  resume_mode: true
+
+distributed:
+  enabled: false
+  world_size: 1
+
+logging:
+  level: "INFO"
+  batch_size: 100
+  progress_report_interval: 10
+
+debug:
+  enabled: false
+  max_files: -1
+  max_items_per_file: -1
+
+

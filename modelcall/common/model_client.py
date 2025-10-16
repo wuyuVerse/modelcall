@@ -107,8 +107,20 @@ class UnifiedModelClient:
             
             # 移除不是 API 参数的配置
             timeout = chat_params.pop("timeout", self.client_config.get("timeout", self.default_timeout))
+            # 兼容 reasoning 参数：
+            # - OpenAI Responses: reasoning = {effort: ...}
+            # - GPT-OSS: reasoning_effort = "low|medium|high"
+            # 通过 extra_body 传递，避免 SDK 参数校验报错
+            extra_body = {}
+            if "reasoning" in chat_params:
+                extra_body["reasoning"] = chat_params.pop("reasoning")
+            if "reasoning_effort" in chat_params:
+                extra_body["reasoning_effort"] = chat_params.pop("reasoning_effort")
             
-            response = await self.client.chat.completions.create(**chat_params)
+            if extra_body:
+                response = await self.client.chat.completions.create(**chat_params, extra_body=extra_body)
+            else:
+                response = await self.client.chat.completions.create(**chat_params)
             
             # 处理响应内容
             content = ""
@@ -121,17 +133,24 @@ class UnifiedModelClient:
                         delta = chunk.choices[0].delta
                         if hasattr(delta, "content") and delta.content:
                             content += delta.content
-                        if hasattr(delta, "reasoning_content") and delta.reasoning_content:
+                        # 兼容字段：reasoning_content 或 reasoning（GPT-OSS）
+                        if hasattr(delta, "reasoning_content") and getattr(delta, "reasoning_content"):
                             reasoning_content += delta.reasoning_content
+                        elif hasattr(delta, "reasoning") and getattr(delta, "reasoning"):
+                            # reasoning 可能是字符串增量，这里直接拼接
+                            reasoning_content += delta.reasoning
             else:
                 # 非流式响应
                 if hasattr(response, "choices") and len(response.choices) > 0:
                     message = response.choices[0].message
+                    # 同时读取 content 与 reasoning/reasoning_content（不能用 elif）
                     if hasattr(message, "content") and message.content:
                         content = message.content
-                    elif hasattr(message, "reasoning_content") and message.reasoning_content:
-                        # 如果 content 为空但有 reasoning_content
+                    if hasattr(message, "reasoning_content") and message.reasoning_content:
                         reasoning_content = message.reasoning_content
+                    # GPT-OSS 返回 message.reasoning
+                    if hasattr(message, "reasoning") and message.reasoning and not reasoning_content:
+                        reasoning_content = message.reasoning
             
             # 组合思维链和内容
             if reasoning_content and reasoning_content.strip():

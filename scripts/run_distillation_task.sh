@@ -94,9 +94,9 @@ echo "⚡ 开始执行任务"
 echo "=========================================="
 echo ""
 
-# 设置PYTHONPATH并执行任务
+# 设置PYTHONPATH并执行任务（使用统一入口 modelcall.run-task）
 export PYTHONPATH="$PROJECT_ROOT:$PYTHONPATH"
-python -m modelcall.core.cli run-task "$CONFIG_PATH"
+python -m modelcall run-task "$CONFIG_PATH"
 
 # 检查执行结果
 EXIT_CODE=$?

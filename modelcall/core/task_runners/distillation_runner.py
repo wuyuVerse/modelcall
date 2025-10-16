@@ -51,7 +51,8 @@ class DistillationTaskRunner(BaseTaskRunner):
             keep_raw_data=distillation_config.get("keep_raw_data", True),
             add_system_prompt=distillation_config.get("add_system_prompt", False),
             system_prompt=distillation_config.get("system_prompt", "You are a helpful assistant and an expert coder."),
-            continue_mode=distillation_config.get("continue_mode", True)
+            continue_mode=distillation_config.get("continue_mode", True),
+            selected_datasets=distillation_config.get("selected_datasets")
         )
         
         converter.run()
@@ -148,19 +149,42 @@ class DistillationTaskRunner(BaseTaskRunner):
         self.logger.info(f"重试模式: {'启用' if retry_mode else '禁用'}")
         self.logger.info(f"断点续传: {'启用' if resume_mode else '禁用'}")
         
-        # 创建响应生成器并执行
-        generator = ResponseGenerator(
-            input_path=input_path,
-            output_path=output_path,
-            client_config=client_config,
-            chat_config=chat_config,
-            concurrency=concurrency,
-            batch_size=batch_size,
-            flush_interval_secs=flush_interval_secs,
-            retry_mode=retry_mode,
-            resume_mode=resume_mode
-        )
-        
-        await generator.run()
-        self.logger.info("✅ 响应生成完成")
+        # 支持目录输入：当 input_path 是目录时，遍历其中的所有 .jsonl 文件逐个生成响应
+        input_path_obj = Path(input_path)
+        if input_path_obj.is_dir():
+            jsonl_files = sorted([p for p in input_path_obj.glob("*.jsonl") if p.is_file()])
+            if not jsonl_files:
+                self.logger.warning(f"输入目录为空或没有 .jsonl 文件: {input_path}")
+                return
+            self.logger.info(f"检测到目录输入，共 {len(jsonl_files)} 个 JSONL 文件，将逐个处理")
+            for idx, file_path in enumerate(jsonl_files, start=1):
+                self.logger.info(f"[{idx}/{len(jsonl_files)}] 处理文件: {str(file_path)}")
+                generator = ResponseGenerator(
+                    input_path=str(file_path),
+                    output_path=output_path,
+                    client_config=client_config,
+                    chat_config=chat_config,
+                    concurrency=concurrency,
+                    batch_size=batch_size,
+                    flush_interval_secs=flush_interval_secs,
+                    retry_mode=retry_mode,
+                    resume_mode=resume_mode
+                )
+                await generator.run()
+            self.logger.info("✅ 目录内所有文件响应生成完成")
+        else:
+            # 单文件模式（保持原有逻辑）
+            generator = ResponseGenerator(
+                input_path=input_path,
+                output_path=output_path,
+                client_config=client_config,
+                chat_config=chat_config,
+                concurrency=concurrency,
+                batch_size=batch_size,
+                flush_interval_secs=flush_interval_secs,
+                retry_mode=retry_mode,
+                resume_mode=resume_mode
+            )
+            await generator.run()
+            self.logger.info("✅ 响应生成完成")
 

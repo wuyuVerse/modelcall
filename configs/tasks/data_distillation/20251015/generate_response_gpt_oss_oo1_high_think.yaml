@@ -1,0 +1,38 @@
+# =============================================================================
+# 响应生成任务配置 - GPT-OSS-120B (High Think-2) - oo1.jsonl（prompt_text 字段）
+# 注意：需要先运行 convert_oo1_to_chatml.yaml 转换为 ChatML 格式
+# =============================================================================
+
+task_name: "generate_response_gpt_oss_high_think2_oo1_20251015"
+task_type: "data_distillation"
+description: "使用 GPT-OSS-120B（High Think-2）为 oo1.jsonl 数据（prompt_text 字段）生成响应"
+
+distillation:
+  step: "generate_response"
+  response_config_path: "configs/models/gpt-oss-120b-high-think-2.yaml"
+
+  # 输入输出：使用 convert_oo1_chatml.yaml 转换后的 JSONL 文件（目录模式：处理其中所有 .jsonl）
+  input_path: "/volume/pt-train/users/wzhang/coder/coder-data/dataset/prepared/oo1"
+  output_path: "/volume/pt-train/users/wzhang/coder/coder-data/dataset/generated/gpt_oss_high_think2_20251015/oo1/"
+
+  concurrency: 1024
+  batch_size: 400
+  flush_interval_secs: 5.0
+  retry_mode: false
+  resume_mode: true
+
+distributed:
+  enabled: false
+  world_size: 1
+
+logging:
+  level: "INFO"
+  batch_size: 100
+  progress_report_interval: 10
+
+debug:
+  enabled: false
+  max_files: -1
+  max_items_per_file: -1
+
+

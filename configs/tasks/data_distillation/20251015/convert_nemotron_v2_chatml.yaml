@@ -1,0 +1,49 @@
+# =============================================================================
+# ChatML 格式转换任务 - Nemotron v2 (messages -> JSONL)
+# =============================================================================
+
+task_name: "convert_nemotron_v2_chatml_20251015"
+task_type: "data_distillation"
+description: "将 Nemotron v2 (已有messages字段) 转换为 JSONL 格式"
+
+# 数据蒸馏配置
+distillation:
+  step: "chatml_conversion"
+  
+  # 数据集配置文件路径（只包含 Nemotron-v2）
+  dataset_config_path: "configs/distillation/datasets_chatml.yaml"
+  
+  # 输入输出路径
+  input_dir: "/volume/pt-train/users/wzhang/hf/datasets/nvidia/Nemotron-Post-Training-Dataset-v2"
+  output_dir: "/volume/pt-train/users/wzhang/coder/coder-data/dataset/prepared"
+  
+  # 处理选项
+  num_processes: 100
+  keep_raw_data: false  # Nemotron v2 已经是最终格式，不需要保留原始数据
+  continue_mode: true
+  # 只处理指定数据集（避免处理所有配置中的数据集）
+  selected_datasets:
+    - "nvidia/Nemotron-Post-Training-Dataset-v2"
+  
+  # System Prompt配置
+  add_system_prompt: false
+  system_prompt: "You are a helpful assistant."
+
+# 分布式配置
+distributed:
+  enabled: false
+  world_size: 1
+
+# 日志配置
+logging:
+  level: "INFO"
+  batch_size: 100
+  progress_report_interval: 10
+
+# 调试配置
+debug:
+  enabled: false
+  max_files: -1
+  max_items_per_file: -1
+
+
